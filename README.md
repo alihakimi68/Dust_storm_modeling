@@ -1,0 +1,31 @@
+# Dust_storm_modeling
+Include spatial neighborhood to improve the prediction accuracy of a predictive model using XGBoost algorithm.
+
+To create the environment and install the required packages:
+
+## For anaconda:
+  - open the anaconda promt
+  - cd to the location of the project
+  - run the Conda_Env_setup.bat file
+  - wait until the installation finish
+  - check the enviroment installation by typing:
+      - conda activate Dstorm_311
+      - conda list -n Dstorm_311
+
+## required packages:
+  - geopandas==0.14.1
+  - rasterio==1.3.9
+  - matplotlib==3.8.1
+  - scikit-learn==1.3.2
+  - numpy==1.26.2
+  - pickles==0.1.1
+  - pandas==2.1.3
+  - xgboost==2.0.2
+
+## After installation run the xboost_training.py file
+
+-  set the project directory in os.chdir
+-  set the required variavles:
+    - CreateDataSet = False  # True for creating a dataset from For training folder
+    - window_size = 3  # 3,5,7 ... for picking window size to search neighbor pixels of dust source
+    - FindBestParam = False  # True for finding the best hyperparameters
