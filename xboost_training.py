@@ -46,7 +46,6 @@ import pickle as pk
 ###################################################################
 
 os.chdir("D:/University/DustStorming/ToAli/DustStormModeling/For training/")
-# shapefile_path = r"D:/ZPX/Research/DustStorm/Thesis files/Input data/For training/dust_sources/dust_training_" + str(year)+ ".shp"
 
 ###################################################################
 # #### Default parameters #########################################
