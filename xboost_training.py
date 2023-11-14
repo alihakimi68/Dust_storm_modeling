@@ -53,15 +53,18 @@ os.chdir("D:/University/DustStorming/ToAli/DustStormModeling/For training/")
 ###################################################################
 
 CreateDataSet = False  # True for creating a dataset from For training folder
-window_size = 9  # 3,5,7,9, ... for picking window size to search neighbor pixels of dust source
+window_size = 7  # 3,5,7,9, ... for picking window size to search neighbor pixels of dust source
 FindBestParam = False  # True for finding the best hyperparameters
 year_list = list(range(2001, 2021))  # temporal duration to study 2021 is not included
+CalculateSeasons = True
+# Predict_Year = 2020 # for the predicting the whole dataset set Predict_Year = year_list
 
 ###################################################################
 # #### Create Data set ############################################
 ###################################################################
 
-if CreateDataSet:
+
+def createDatasetFunc(year_list,window_size,PeriodName):
     dfs = []
     # Create an empty dataframe to store extracted values. This part is to generate
     # training data including dust sources and non dust sources
@@ -79,7 +82,7 @@ if CreateDataSet:
                                 'Profile curvature','Profile curv avr','Profile curv var',
                                 'Distance to river','Dist river avr','Dist river var',
                                 'Slope','Slope avr','Slope var',
-                                'dust_storm',
+                                'dust_storm'
                                ])
     # Find the dust source for every year
     for year in year_list:
@@ -149,6 +152,7 @@ if CreateDataSet:
                         # print(f'{raster.name}, window_average={window_average}, window_variance={window_variance}')
 
             values.append(row['ID'])
+            # values.append(year)
 
             temp_df = pd.DataFrame([values], columns=df.columns)
             dfs.append(temp_df)
@@ -158,72 +162,180 @@ if CreateDataSet:
         df = pd.concat(dfs, ignore_index=True)
     # print(df.dtypes)
 
-    pk.dump(df, open(f'df_dustsources_{window_size}_X_{window_size}.pickle','wb'))
+    pk.dump(df, open(f'df_dustsources_{window_size}_X_{window_size}_{PeriodName}.pickle','wb'))
+
+
+if CreateDataSet:
+    print(f'CreateDataSet is set to {CreateDataSet}')
+    if CalculateSeasons:
+        print(f'CalculateSeasons is set to {CreateDataSet}')
+        periods = [year_list[0:4],year_list[4:7],year_list[7:12],year_list[12:20]] # For Four Periods 2 Dry and 2Wet
+        # periods = [year_list[0:4] + year_list[7:12], year_list[4:7] + year_list[12:20]] # FOr 2 Periods 1 Dry and 1 Wet
+        for period in periods:
+            year_list_period = period
+            print(f'Creating Data set for {year_list_period}')
+            # First Period is Dry from 2000:2004
+            # Second Period is Wet from 2005:2007
+            # Third Period is Dry from 2008:2012
+            # Fourth Period is Wet from 2012:2020
+            PeriodName = len(year_list_period)
+            createDatasetFunc(year_list_period, window_size,PeriodName)
+    else:
+        print(f'CalculateSeasons is set to {CreateDataSet}')
+        PeriodName = len(year_list)
+        print(f'Creating Data set for {year_list}')
+        createDatasetFunc(year_list, window_size,PeriodName)
 
 ###################################################################
 # #### Load Data set ##############################################
 ###################################################################
 
-print(f'windows size: {window_size}')
 
-df = pk.load(open(f'df_dustsources_{window_size}_X_{window_size}.pickle','rb'))
-# Replace the no data value with nan in the dataframe
-df.replace(-3.4028234663852886e+38, np.nan, inplace=True)
+def loadDatSet(df,window_size):
+    print(f'windows size: {window_size}')
 
-# Count the occurrences of each value in the dust_storm column
-dust_storm_counts = df['dust_storm'].value_counts()
 
-# Define the mapping dictionary for each dataset
-landuse_mapping = {0: 'Water', 1: 'Natural vegetation', 3: 'Cropland', 4: 'Urban', 6: 'Bare Soil'}
-soil_type_mapping = {0: 'Silt', 1: 'Clay', 2: 'Silt Clay', 3: 'Sand Clay', 4: 'Clay Loam', 5: 'Silt Clay Loam', 6: 'Sand Clay Loam', 7: 'Loam', 8: 'Silt Loam', 9: 'Sand Loam', 11: 'Loam Sand', 12: 'Sand'}
+    # Replace the no data value with nan in the dataframe
+    df.replace(-3.4028234663852886e+38, np.nan, inplace=True)
 
-# Replace the numerical values with their corresponding category names for dataset1
-df.replace({'landcover': landuse_mapping, 'soil_type': soil_type_mapping}, inplace=True)
+    # Count the occurrences of each value in the dust_storm column
+    dust_storm_counts = df['dust_storm'].value_counts()
 
-# Create dummy variables for each categorical column in the dataframe
-dummy_landcover = pd.get_dummies(df['landcover'])
-dummy_soil_type = pd.get_dummies(df['soil_type'])
+    # Define the mapping dictionary for each dataset
+    landuse_mapping = {0: 'Water', 1: 'Natural vegetation', 3: 'Cropland', 4: 'Urban', 6: 'Bare Soil'}
+    soil_type_mapping = {0: 'Silt', 1: 'Clay', 2: 'Silt Clay', 3: 'Sand Clay', 4: 'Clay Loam', 5: 'Silt Clay Loam',
+                         6: 'Sand Clay Loam', 7: 'Loam', 8: 'Silt Loam', 9: 'Sand Loam', 11: 'Loam Sand', 12: 'Sand'}
 
-# Add missing columns to dataframe with a value of 0
-for col in soil_type_mapping.values():
-    if col not in dummy_soil_type.columns:
-        dummy_soil_type[col] = 0
+    # Replace the numerical values with their corresponding category names for dataset1
+    df.replace({'landcover': landuse_mapping, 'soil_type': soil_type_mapping}, inplace=True)
 
-# concatonate both dummy dataframes
-dummy_df = pd.concat([dummy_landcover, dummy_soil_type], axis=1)
+    # Create dummy variables for each categorical column in the dataframe
+    dummy_landcover = pd.get_dummies(df['landcover'])
+    dummy_soil_type = pd.get_dummies(df['soil_type'])
 
-# concatenate dummy variables to original dataframe
-df = pd.concat([df, dummy_df], axis=1)
+    # Add missing columns to dataframe with a value of 0
+    for col in soil_type_mapping.values():
+        if col not in dummy_soil_type.columns:
+            dummy_soil_type[col] = 0
 
-# drop original categorical columns
-df = df.drop(columns=['landcover', 'soil_type'])
+    # concatonate both dummy dataframes
+    dummy_df = pd.concat([dummy_landcover, dummy_soil_type], axis=1)
 
-# drop not important columns
-df = df.drop(columns=['Water', 'Clay', 'Silt', 'Silt Loam', 'Silt Clay', 'Sand Clay', 'Silt Clay Loam', 'Urban'])
+    # concatenate dummy variables to original dataframe
+    df = pd.concat([df, dummy_df], axis=1)
 
-if 255.0 in df.columns:
-    df.drop(255.0, axis=1, inplace=True)
-# else:
-#     print("Column 255.0 not found!")
+    # drop original categorical columns
+    df = df.drop(columns=['landcover', 'soil_type'])
 
-if -1 in df.columns:
-    df.drop(-1, axis=1, inplace=True)
-# else:
-#     print("Column -1 not found!")
+    # drop not important columns
+    df = df.drop(columns=['Water', 'Clay', 'Silt', 'Silt Loam', 'Silt Clay', 'Sand Clay', 'Silt Clay Loam', 'Urban'])
 
-# Normalize every column of df
-# scaler = MinMaxScaler()
-# df_normalized = pd.DataFrame(scaler.fit_transform(df), columns=df.columns)
-#
-# X = df_normalized.drop(['dust_storm'], axis=1)
-# y = df_normalized['dust_storm']
-# df_normalized.to_csv('training.csv', index=False)
+    if 255.0 in df.columns:
+        df.drop(255.0, axis=1, inplace=True)
+    # else:
+    #     print("Column 255.0 not found!")
 
-X = df.drop(['dust_storm'], axis=1)
-y = df['dust_storm']
-df.to_csv('training.csv', index=False)
-# Split data to 70% training, 20% testing
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=15)
+    if -1 in df.columns:
+        df.drop(-1, axis=1, inplace=True)
+    # else:
+    #     print("Column -1 not found!")
+
+    # Normalize every column of df
+    # scaler = MinMaxScaler()
+    # df_normalized = pd.DataFrame(scaler.fit_transform(df), columns=df.columns)
+    #
+    # X = df_normalized.drop(['dust_storm'], axis=1)
+    # y = df_normalized['dust_storm']
+    # df_normalized.to_csv('training.csv', index=False)
+
+    X = df.drop(['dust_storm'], axis=1)
+    y = df['dust_storm']
+    df.to_csv('training.csv', index=False)
+    # Split data to 70% training, 20% testing
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=15)
+
+    return X_train,X_test,y_train,y_test,X, y
+
+
+def fitTheModelXGboost(X_train, X_test, y_train, y_test,X, y):
+    ###################################################################
+    # #### Fit the model and result ###################################
+    ###################################################################
+    # Set hyperparameters
+    params = {}
+    params['objective'] = 'binary:logistic'
+    params['num_class'] = 1
+    params['eval_metric'] = 'auc'
+    params['learning_rate'] = 0.02
+    # params['max_depth'] = 5
+    # window size = 5: max_depth=7, window size = 7: max_depth=10
+    if window_size == 5:
+        params['max_depth'] = 7
+    if window_size == 7:
+        params['max_depth'] = 10
+    params['min_child_weight'] = 2
+    params['reg_alpha'] = 0.6
+    params['reg_lambda'] = 0.7
+    params['subsample'] = 0.7
+    params['gamma'] = 0.2
+    params['num_parallel_tree'] = 2
+
+    # Create an XGBoost classifier with the hyperparameters dictionary
+    xgb_model = xgb.XGBClassifier(**params)
+
+    # Fit the XGBoost model to the training data
+    xgb_model.fit(X_train, y_train)
+
+    # Predict class labels
+    # y_pred = xgb_model.predict(X_val) # validation set
+    y_pred = xgb_model.predict(X_test)  # final test set
+
+    # Evaluate the metrics to check accuracy, precision, recall, f1-score, confusion matrix and AUC
+    accuracy = accuracy_score(y_test, y_pred)
+    precision = precision_score(y_test, y_pred)
+    recall = recall_score(y_test, y_pred)
+    f1 = f1_score(y_test, y_pred)
+    conf_matrix = confusion_matrix(y_test, y_pred)
+    auc = roc_auc_score(y_test, y_pred)
+
+    # Print the metrics
+    print("Accuracy: {:.2f}%".format(accuracy * 100))
+    print("Precision: {:.2f}%".format(precision * 100))
+    print("Recall: {:.2f}%".format(recall * 100))
+    print("F1-score: {:.2f}%".format(f1 * 100))
+    print('Confusion matrix:\n True negative: %s \
+          \n False positive: %s \n False negative: %s \n True positive: %s'
+          % (conf_matrix[0, 0], conf_matrix[0, 1], conf_matrix[1, 0], conf_matrix[1, 1]))
+    print('AUC: {:.2f}%'.format(auc * 100))
+
+    # Cross validation
+    scores = cross_val_score(xgb_model, X, y, cv=5)
+    print('The cross validation accuracies of the model are', scores)
+    print('The cross validation accuracy of the model is', np.mean(scores))
+
+    # Plot feature importance
+    xgb.plot_importance(xgb_model)
+    plt.show()
+
+
+if CalculateSeasons:
+    print(f'CalculateSeasons is set to {CreateDataSet}')
+    periods = [year_list[0:4], year_list[4:7], year_list[7:12], year_list[12:20]] # For Four Periods 2 Dry and 2Wet
+    # periods = [year_list[0:4] + year_list[7:12], year_list[4:7] + year_list[12:20]]  # FOr 2 Periods 1 Dry and 1 Wet
+    for period in periods:
+        year_list_period = period
+        print(f'Calculating the priod:{year_list_period}')
+        PeriodName = len(year_list_period)
+        df = pk.load(open(f'df_dustsources_{window_size}_X_{window_size}_{PeriodName}.pickle', 'rb'))
+        X_train, X_test, y_train, y_test, X, y = loadDatSet(df,window_size)
+        fitTheModelXGboost(X_train, X_test, y_train, y_test,X, y)
+else:
+    print(f'CalculateSeasons is set to {CreateDataSet}')
+    PeriodName = len(year_list)
+    print(f'Calculating the priod:{year_list}')
+    df = pk.load(open(f'df_dustsources_{window_size}_X_{window_size}_{PeriodName}.pickle', 'rb'))
+    X_train, X_test, y_train, y_test, X, y = loadDatSet(df, window_size)
+    fitTheModelXGboost(X_train, X_test, y_train, y_test,X, y)
 
 ###################################################################
 # #### HYPERPARAMETER TUNING ######################################
@@ -262,58 +374,4 @@ if FindBestParam:
     # Print the best hyperparameters
     print('Best hyperparameters:', rs.best_params_)
 
-###################################################################
-# #### Fit the model and result ###################################
-###################################################################
 
-# Set hyperparameters
-params = {}
-params['objective'] = 'binary:logistic'
-params['num_class'] = 1
-params['eval_metric'] = 'auc'
-params['learning_rate'] = 0.02
-# params['max_depth'] = 5
-params['max_depth'] = 10 # window size = 5: max_depth=7, window size = 5: max_depth=10
-params['min_child_weight'] = 2
-params['reg_alpha'] = 0.6
-params['reg_lambda'] = 0.7
-params['subsample'] = 0.7
-params['gamma'] = 0.2
-params['num_parallel_tree'] = 2
-
-# Create an XGBoost classifier with the hyperparameters dictionary
-xgb_model = xgb.XGBClassifier(**params)
-
-# Fit the XGBoost model to the training data
-xgb_model.fit(X_train, y_train)
-
-# Predict class labels
-#y_pred = xgb_model.predict(X_val) # validation set
-y_pred = xgb_model.predict(X_test) # final test set
-
-# Evaluate the metrics to check accuracy, precision, recall, f1-score, confusion matrix and AUC
-accuracy = accuracy_score(y_test, y_pred)
-precision = precision_score(y_test,y_pred)
-recall = recall_score(y_test, y_pred)
-f1 = f1_score(y_test, y_pred)
-conf_matrix = confusion_matrix(y_test, y_pred)
-auc = roc_auc_score(y_test, y_pred)
-
-# Print the metrics
-print("Accuracy: {:.2f}%".format(accuracy*100))
-print("Precision: {:.2f}%".format(precision*100))
-print("Recall: {:.2f}%".format(recall*100))
-print("F1-score: {:.2f}%".format(f1*100))
-print('Confusion matrix:\n True negative: %s \
-      \n False positive: %s \n False negative: %s \n True positive: %s'
-       % (conf_matrix[0,0], conf_matrix[0,1], conf_matrix[1,0], conf_matrix[1,1]))
-print('AUC: {:.2f}%'.format(auc*100))
-
-# Cross validation
-scores = cross_val_score(xgb_model, X, y, cv=5)
-print('The cross validation accuracies of the model are', scores)
-print('The cross validation accuracy of the model is', np.mean(scores))
-
-# Plot feature importance
-xgb.plot_importance(xgb_model)
-plt.show()
