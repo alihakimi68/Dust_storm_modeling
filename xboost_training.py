@@ -40,75 +40,53 @@ from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, r
 import math as m
 import pickle as pk
 
+###################################################################
+# #### Data Path ##################################################
+###################################################################
 
-# #### Data Path ####################################################
 os.chdir("D:/University/DustStorming/ToAli/DustStormModeling/For training/")
+# shapefile_path = r"D:/ZPX/Research/DustStorm/Thesis files/Input data/For training/dust_sources/dust_training_" + str(year)+ ".shp"
 
-# #### Create Data set ##############################################
+###################################################################
+# #### Create Data set ############################################
+###################################################################
 
-CreateDataSet = False  # True for creating a dataset from For training folder
+CreateDataSet = True  # True for creating a dataset from For training folder
 window_size = 3  # 3,5,7 ... for picking window size to search neighbor pixels of dust source
 FindBestParam = False  # True for finding the best hyperparameters
+year_list = list(range(2001, 2022))  # temporal duration to study
 
-# #### Create Data set ##############################################
+###################################################################
+# #### Create Data set ############################################
+###################################################################
+
 if CreateDataSet:
     dfs = []
-    # Create an empty dataframe to store extracted values. This part is to generate training data including dust sources and non dust sources
-
-    df = pd.DataFrame(columns=['Soil evaporation',
-                                'Soil eva avr',
-                                'Soil eva var',
-                                'Lakes',
-                                'Lake entropy',
-                                'landcover',
-                                'land entropy',
-                                'Precipitation',
-                                'Precicpt avr',
-                                'Precicpt var',
-                                'Soil moisture',
-                                'Soil moist avr',
-                                'Soil moist var',
-                                'NDVI',
-                                'NDVI avr',
-                                'NDVI var',
-                                'Elevation',
-                                'Elevation avr',
-                                'Elevation var',
-                                'soil_type',
-                                'soil entropy',
-                                'Aspect',
-                                'Aspect avr',
-                                'Aspect var',
-                                'Curvature',
-                                'Curvature avr',
-                                'Curvature var',
-                                'Plan curvature',
-                                'Plan curv avr',
-                                'Plan curv var',
-                                'Profile curvature',
-                                'Profile curv avr',
-                                'Profile curv var',
-                                'Distance to river',
-                                'Dist river avr',
-                                'Dist river var',
-                                'Slope',
-                                'Slope avr',
-                                'Slope var',
+    # Create an empty dataframe to store extracted values. This part is to generate
+    # training data including dust sources and non dust sources
+    df = pd.DataFrame(columns=['Soil evaporation','Soil eva avr','Soil eva var',
+                                'Lakes','Lake entropy',
+                                'landcover','land entropy',
+                                'Precipitation','Precicpt avr','Precicpt var',
+                                'Soil moisture','Soil moist avr','Soil moist var',
+                                'NDVI','NDVI avr','NDVI var',
+                                'Elevation','Elevation avr','Elevation var',
+                                'soil_type','soil entropy',
+                                'Aspect','Aspect avr','Aspect var',
+                                'Curvature','Curvature avr','Curvature var',
+                                'Plan curvature','Plan curv avr','Plan curv var',
+                                'Profile curvature','Profile curv avr','Profile curv var',
+                                'Distance to river','Dist river avr','Dist river var',
+                                'Slope','Slope avr','Slope var',
                                 'dust_storm',
                                ])
-    #df = pd.DataFrame(columns=['Soil evaporation'])
-    # Create a dictionary to store window data for each year
-
-    for year in range(2001, 2021):
+    # Find the dust source for every year
+    for year in year_list:
     #for year in range(2001):
-        print(year)
-        # if year == 2003:
-        #     continue
-        # Load shapefile containing dust storm sources for a given year
-        # shapefile_path = r"D:/ZPX/Research/DustStorm/Thesis files/Input data/For training/dust_sources/dust_training_" + str(year)+ ".shp"
-        shapefile_path = r"D:/University/DustStorming/ToAli/DustStormModeling/For training/dust_sources/dust_training_" + str(
-            year) + ".shp"
 
+        print(year)
+        shapefile_path = r"D:/University/DustStorming/ToAli/DustStormModeling/For training/dust_sources/dust_training_" \
+                     + str(year) + ".shp"
         dust_storms = gpd.read_file(shapefile_path)
 
         # Load the rasters for the same year
@@ -116,15 +94,8 @@ if CreateDataSet:
                         "lakes/lakes_"+str(year),"land_use/landuse_"+str(year),
                         "precipitation/prec_"+str(year), "soil_moisture/sm_"+str(year),
                         "ndvi/ndvi_"+str(year),
-                        "elevation",
-                        "soil",
-                        "aspect",
-                        "curvature",
-                        "plan_c",
-                        "profile_c",
-                        "distance_riv",
-                        "slope"]
-        # raster_paths = ["soil_evaporation/soil_evap_" + str(year)+".tif"]
+                        "elevation","soil","aspect","curvature",
+                        "plan_c","profile_c","distance_riv","slope"]
 
         # Extract raster values for each dust storm source/non source
         for i, row in dust_storms.iterrows():
@@ -133,17 +104,13 @@ if CreateDataSet:
             flattenWindow = []
 
             for raster_path in raster_paths:
-                # if raster_path == "soil_moisture/sm_2003": # the soil moisture data in 2003 is missing
-                #     continue
+
                 with rasterio.open(raster_path) as raster:
                     value = next(raster.sample([point]))[0]
                     values.append(value)
-                    # print(value)
-                    # print('#############')
-                    # Ali
+
                     # Get the row and column indices for the point
                     row_idx, col_idx = raster.index(point[0], point[1])
-
 
                     # Define window centered at the point
                     window = Window(col_off=col_idx - 3, row_off=row_idx - 3, width=window_size, height=window_size)
@@ -192,7 +159,10 @@ if CreateDataSet:
 
     pk.dump(df, open(f'df_dustsources_{window_size}_X_{window_size}.pickle','wb'))
 
+###################################################################
 # #### Load Data set ##############################################
+###################################################################
+
 df = pk.load(open(f'df_dustsources_{window_size}_X_{window_size}.pickle','rb'))
 # Replace the no data value with nan in the dataframe
 df.replace(-3.4028234663852886e+38, np.nan, inplace=True)
@@ -244,7 +214,10 @@ df.to_csv('training.csv', index=False)
 # Split data to 70% training, 20% testing
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=15)
 
-# #### HYPERPARAMETER TUNING ##############################################
+###################################################################
+# #### HYPERPARAMETER TUNING ######################################
+###################################################################
+
 if FindBestParam:
 
     # RandomizedSearchCV
@@ -278,21 +251,9 @@ if FindBestParam:
     # Print the best hyperparameters
     print('Best hyperparameters:', rs.best_params_)
 
-    # #########################################################################
-
-# Set hyperparameters for 3 by 3
-# params = {}
-# params['objective'] = 'binary:logistic'
-# params['num_class'] = 1
-# params['eval_metric'] = 'auc'
-# params['learning_rate'] = 0.03
-# params['max_depth'] = 4
-# params['min_child_weight'] = 2
-# params['reg_alpha'] = 0.6
-# params['reg_lambda'] = 0.7
-# params['subsample'] = 0.7
-# params['gamma'] = 0.2
-# params['num_parallel_tree'] = 2
+###################################################################
+# #### Fit the model and result ###################################
+###################################################################
 
 # Set hyperparameters
 params = {}
