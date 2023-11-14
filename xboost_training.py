@@ -35,6 +35,7 @@ import xgboost as xgb
 import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split, GridSearchCV, cross_val_score, RandomizedSearchCV
 from sklearn.feature_selection import mutual_info_classif, RFE
+from sklearn.preprocessing import MinMaxScaler
 import numpy as np
 from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
 import math as m
@@ -51,10 +52,10 @@ os.chdir("D:/University/DustStorming/ToAli/DustStormModeling/For training/")
 # #### Default parameters #########################################
 ###################################################################
 
-CreateDataSet = True  # True for creating a dataset from For training folder
-window_size = 3  # 3,5,7 ... for picking window size to search neighbor pixels of dust source
+CreateDataSet = False  # True for creating a dataset from For training folder
+window_size = 9  # 3,5,7,9, ... for picking window size to search neighbor pixels of dust source
 FindBestParam = False  # True for finding the best hyperparameters
-year_list = list(range(2001, 2022))  # temporal duration to study
+year_list = list(range(2001, 2021))  # temporal duration to study 2021 is not included
 
 ###################################################################
 # #### Create Data set ############################################
@@ -163,6 +164,8 @@ if CreateDataSet:
 # #### Load Data set ##############################################
 ###################################################################
 
+print(f'windows size: {window_size}')
+
 df = pk.load(open(f'df_dustsources_{window_size}_X_{window_size}.pickle','rb'))
 # Replace the no data value with nan in the dataframe
 df.replace(-3.4028234663852886e+38, np.nan, inplace=True)
@@ -207,6 +210,14 @@ if -1 in df.columns:
     df.drop(-1, axis=1, inplace=True)
 # else:
 #     print("Column -1 not found!")
+
+# Normalize every column of df
+# scaler = MinMaxScaler()
+# df_normalized = pd.DataFrame(scaler.fit_transform(df), columns=df.columns)
+#
+# X = df_normalized.drop(['dust_storm'], axis=1)
+# y = df_normalized['dust_storm']
+# df_normalized.to_csv('training.csv', index=False)
 
 X = df.drop(['dust_storm'], axis=1)
 y = df['dust_storm']
@@ -260,13 +271,14 @@ params = {}
 params['objective'] = 'binary:logistic'
 params['num_class'] = 1
 params['eval_metric'] = 'auc'
-params['learning_rate'] = 0.01
-params['max_depth'] = 4
-params['min_child_weight'] = 1
-params['reg_alpha'] = 0.4
-params['reg_lambda'] = 0.4
-params['subsample'] = 0.8
-params['gamma'] = 0
+params['learning_rate'] = 0.02
+# params['max_depth'] = 5
+params['max_depth'] = 10 # window size = 5: max_depth=7, window size = 5: max_depth=10
+params['min_child_weight'] = 2
+params['reg_alpha'] = 0.6
+params['reg_lambda'] = 0.7
+params['subsample'] = 0.7
+params['gamma'] = 0.2
 params['num_parallel_tree'] = 2
 
 # Create an XGBoost classifier with the hyperparameters dictionary
