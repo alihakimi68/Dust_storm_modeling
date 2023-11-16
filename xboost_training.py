@@ -52,7 +52,7 @@ os.chdir("D:/University/DustStorming/ToAli/DustStormModeling/For training/")
 ###################################################################
 
 CreateDataSet = False  # True for creating a dataset from For training folder
-window_size = 7  # 3,5,7,9, ... for picking window size to search neighbor pixels of dust source
+window_size = 0  # 0,3,5,7,9, ... for picking window size to search neighbor pixels of dust source
 FindBestParam = False  # True for finding the best hyperparameters
 year_list = list(range(2001, 2021))  # temporal duration to study 2021 is not included
 CalculateSeasons = True
@@ -64,102 +64,139 @@ CalculateSeasons = True
 
 
 def createDatasetFunc(year_list,window_size,PeriodName):
-    dfs = []
-    # Create an empty dataframe to store extracted values. This part is to generate
-    # training data including dust sources and non dust sources
-    df = pd.DataFrame(columns=['Soil evaporation','Soil eva avr','Soil eva var',
-                                'Lakes','Lake entropy',
-                                'landcover','land entropy',
-                                'Precipitation','Precicpt avr','Precicpt var',
-                                'Soil moisture','Soil moist avr','Soil moist var',
-                                'NDVI','NDVI avr','NDVI var',
-                                'Elevation','Elevation avr','Elevation var',
-                                'soil_type','soil entropy',
-                                'Aspect','Aspect avr','Aspect var',
-                                'Curvature','Curvature avr','Curvature var',
-                                'Plan curvature','Plan curv avr','Plan curv var',
-                                'Profile curvature','Profile curv avr','Profile curv var',
-                                'Distance to river','Dist river avr','Dist river var',
-                                'Slope','Slope avr','Slope var',
-                                'dust_storm'
-                               ])
-    # Find the dust source for every year
-    for year in year_list:
-    #for year in range(2001):
+    if window_size == 0:
+        dfs = []
+        # Create an empty dataframe to store extracted values. This part is to generate training data including dust sources and non dust sources
+        df = pd.DataFrame(columns=['Soil evaporation', 'Lakes', 'landcover', 'Precipitation', 'Soil moisture', 'NDVI', 'Elevation', 'soil_type', 'Aspect', 'Curvature', 'Plan curvature', 'Profile curvature', 'Distance to river', 'Slope', 'dust_storm'])
 
-        print(year)
-        shapefile_path = r"D:/University/DustStorming/ToAli/DustStormModeling/For training/dust_sources/dust_training_" \
-                     + str(year) + ".shp"
-        dust_storms = gpd.read_file(shapefile_path)
+        for year in year_list:
+            print(year)
 
-        # Load the rasters for the same year
-        raster_paths = ["soil_evaporation/soil_evap_"+str(year)+".tif",
-                        "lakes/lakes_"+str(year),"land_use/landuse_"+str(year),
-                        "precipitation/prec_"+str(year), "soil_moisture/sm_"+str(year),
-                        "ndvi/ndvi_"+str(year),
-                        "elevation","soil","aspect","curvature",
-                        "plan_c","profile_c","distance_riv","slope"]
+            # Load shapefile containing dust storm sources for a given year
+            # shapefile_path = r"D:/ZPX/Research/DustStorm/Thesis files/Input data/For training/dust_sources/dust_training_" + str(year)+ ".shp"
+            shapefile_path = r"D:/University/DustStorming/ToAli/DustStormModeling/For training/dust_sources/dust_training_" + str(
+                        year) + ".shp"
+            dust_storms = gpd.read_file(shapefile_path)
 
-        # Extract raster values for each dust storm source/non source
-        for i, row in dust_storms.iterrows():
-            point = (row.geometry.x, row.geometry.y)
-            values = []
-            flattenWindow = []
+            # Load the rasters for the same year
+            raster_paths = ["soil_evaporation/soil_evap_"+str(year)+".tif", "lakes/lakes_"+str(year),"land_use/landuse_"+str(year), "precipitation/prec_"+str(year), "soil_moisture/sm_"+str(year),"ndvi/ndvi_"+str(year), "elevation", "soil", "aspect", "curvature", "plan_c", "profile_c", "distance_riv", "slope"]
 
-            for raster_path in raster_paths:
+            # Extract raster values for each dust storm source/non source
+            for i, row in dust_storms.iterrows():
+                point = (row.geometry.x, row.geometry.y)
+                values = []
+                for raster_path in raster_paths:
+                    # if raster_path == "soil_moisture/sm_2003": # the soil moisture data in 2003 is missing
+                    #     continue
+                    with rasterio.open(raster_path) as raster:
+                        value = next(raster.sample([point]))[0]
+                        values.append(value)
+                values.append(row['ID'])
+                temp_df = pd.DataFrame([values], columns=df.columns)
+                dfs.append(temp_df)
 
-                with rasterio.open(raster_path) as raster:
-                    value = next(raster.sample([point]))[0]
-                    values.append(value)
+                # Check if the list of DataFrames is not empty before concatenating
+        if dfs:
+            df = pd.concat(dfs, ignore_index=True)
+            # print(df.dtypes)
 
-                    # Get the row and column indices for the point
-                    row_idx, col_idx = raster.index(point[0], point[1])
+    else:
+        dfs = []
+        # Create an empty dataframe to store extracted values. This part is to generate
+        # training data including dust sources and non dust sources
+        df = pd.DataFrame(columns=['Soil evaporation','Soil eva avr','Soil eva var',
+                                    'Lakes','Lake entropy',
+                                    'landcover','land entropy',
+                                    'Precipitation','Precicpt avr','Precicpt var',
+                                    'Soil moisture','Soil moist avr','Soil moist var',
+                                    'NDVI','NDVI avr','NDVI var',
+                                    'Elevation','Elevation avr','Elevation var',
+                                    'soil_type','soil entropy',
+                                    'Aspect','Aspect avr','Aspect var',
+                                    'Curvature','Curvature avr','Curvature var',
+                                    'Plan curvature','Plan curv avr','Plan curv var',
+                                    'Profile curvature','Profile curv avr','Profile curv var',
+                                    'Distance to river','Dist river avr','Dist river var',
+                                    'Slope','Slope avr','Slope var',
+                                    'dust_storm'
+                                   ])
+        # Find the dust source for every year
+        for year in year_list:
+        #for year in range(2001):
 
-                    # Define window centered at the point
-                    window = Window(col_off=col_idx - 3, row_off=row_idx - 3, width=window_size, height=window_size)
+            print(year)
+            shapefile_path = r"D:/University/DustStorming/ToAli/DustStormModeling/For training/dust_sources/dust_training_" \
+                         + str(year) + ".shp"
+            dust_storms = gpd.read_file(shapefile_path)
 
-                    # Read the data within the window
-                    window_data = raster.read(1, window=window)
+            # Load the rasters for the same year
+            raster_paths = ["soil_evaporation/soil_evap_"+str(year)+".tif",
+                            "lakes/lakes_"+str(year),"land_use/landuse_"+str(year),
+                            "precipitation/prec_"+str(year), "soil_moisture/sm_"+str(year),
+                            "ndvi/ndvi_"+str(year),
+                            "elevation","soil","aspect","curvature",
+                            "plan_c","profile_c","distance_riv","slope"]
 
-                    if np.any(np.isclose(window_data, -3.40282e+38)):  # check for any no data
-                        window_masked = np.ma.masked_values(window_data, -3.40282e+38).compressed()
-                    else:
-                        window_masked = window_data
-                    window_values = window_masked.flatten()
-                    if window_values.size == 0:
-                        # window_values = np.zeros((1, 9))
-                        #window_values = np.zeros((1, 25))
-                        window_values = np.zeros((1, window_size**2))
+            # Extract raster values for each dust storm source/non source
+            for i, row in dust_storms.iterrows():
+                point = (row.geometry.x, row.geometry.y)
+                values = []
+                flattenWindow = []
 
-                    if raster.name in (raster_paths[1],raster_paths[2],raster_paths[7]):  # Check for categorical data
+                for raster_path in raster_paths:
 
-                        # Calculate the entropy of the window_values
-                        window_entropy = -np.sum(
-                            np.log2(np.maximum(window_values, np.finfo(float).eps)) * window_values) / window_values.size
-                        window_entropy = round(np.float64(window_entropy),6)
+                    with rasterio.open(raster_path) as raster:
+                        value = next(raster.sample([point]))[0]
+                        values.append(value)
 
-                        values.append(window_entropy)
+                        # Get the row and column indices for the point
+                        row_idx, col_idx = raster.index(point[0], point[1])
 
-                        # print(f' {raster.name}, window_entropy={window_entropy}')
-                    else:
-                        # Calculate the average and variance of the values within the window
-                        window_average = round(window_values.mean(),6)
-                        window_variance = round(window_values.var(),6)
-                        values.append(window_average)
-                        values.append(window_variance)
+                        # Define window centered at the point
+                        window = Window(col_off=col_idx - 3, row_off=row_idx - 3, width=window_size, height=window_size)
 
-                        # print(f'{raster.name}, window_average={window_average}, window_variance={window_variance}')
+                        # Read the data within the window
+                        window_data = raster.read(1, window=window)
 
-            values.append(row['ID'])
-            # values.append(year)
+                        if np.any(np.isclose(window_data, -3.40282e+38)):  # check for any no data
+                            window_masked = np.ma.masked_values(window_data, -3.40282e+38).compressed()
+                        else:
+                            window_masked = window_data
+                        window_values = window_masked.flatten()
+                        if window_values.size == 0:
+                            # window_values = np.zeros((1, 9))
+                            #window_values = np.zeros((1, 25))
+                            window_values = np.zeros((1, window_size**2))
 
-            temp_df = pd.DataFrame([values], columns=df.columns)
-            dfs.append(temp_df)
+                        if raster.name in (raster_paths[1],raster_paths[2],raster_paths[7]):  # Check for categorical data
 
-    # Check if the list of DataFrames is not empty before concatenating
-    if dfs:
-        df = pd.concat(dfs, ignore_index=True)
-    # print(df.dtypes)
+                            # Calculate the entropy of the window_values
+                            window_entropy = -np.sum(
+                                np.log2(np.maximum(window_values, np.finfo(float).eps)) * window_values) / window_values.size
+                            window_entropy = round(np.float64(window_entropy),6)
+
+                            values.append(window_entropy)
+
+                            # print(f' {raster.name}, window_entropy={window_entropy}')
+                        else:
+                            # Calculate the average and variance of the values within the window
+                            window_average = round(window_values.mean(),6)
+                            window_variance = round(window_values.var(),6)
+                            values.append(window_average)
+                            values.append(window_variance)
+
+                            # print(f'{raster.name}, window_average={window_average}, window_variance={window_variance}')
+
+                values.append(row['ID'])
+                # values.append(year)
+
+                temp_df = pd.DataFrame([values], columns=df.columns)
+                dfs.append(temp_df)
+
+        # Check if the list of DataFrames is not empty before concatenating
+        if dfs:
+            df = pd.concat(dfs, ignore_index=True)
+        # print(df.dtypes)
 
     pk.dump(df, open(f'df_dustsources_{window_size}_X_{window_size}_{PeriodName}.pickle','wb'))
 
