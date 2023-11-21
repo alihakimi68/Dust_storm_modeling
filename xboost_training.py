@@ -52,16 +52,32 @@ os.chdir("D:/University/DustStorming/ToAli/DustStormModeling/For training/")
 ###################################################################
 
 CreateDataSet = False  # True for creating a dataset from For training folder
-window_size = 0  # 0,3,5,7,9, ... for picking window size to search neighbor pixels of dust source
+window_size = 5  # 0,3,5,7,9, ... for picking window size to search neighbor pixels of dust source
 FindBestParam = False  # True for finding the best hyperparameters
 year_list = list(range(2001, 2021))  # temporal duration to study 2021 is not included
-CalculateSeasons = True
+CalculateSeasons = True  # divide data in to 4 periods :
+# First Period is Dry from 2000:2004
+# Second Period is Wet from 2005:2007
+# Third Period is Dry from 2008:2012
+# Fourth Period is Wet from 2012:2020
+NormalizeDataset = True  # normalize the data with StandardScaler method
 # Predict_Year = 2020 # for the predicting the whole dataset set Predict_Year = year_list
 
 ###################################################################
 # #### Create Data set ############################################
 ###################################################################
 
+def calculate_entropy(data):
+    # Convert the list to a numpy array
+    data_array = np.array(data)
+    # Calculate the frequency of each unique element in the array
+    unique_elements, counts = np.unique(data_array, return_counts=True)
+    # Calculate probabilities
+    probabilities = counts / len(data)
+    # Calculate entropy
+    entropy = -np.sum(probabilities * np.log2(probabilities))
+
+    return entropy
 
 def createDatasetFunc(year_list,window_size,PeriodName):
     if window_size == 0:
@@ -153,7 +169,10 @@ def createDatasetFunc(year_list,window_size,PeriodName):
                         row_idx, col_idx = raster.index(point[0], point[1])
 
                         # Define window centered at the point
-                        window = Window(col_off=col_idx - 3, row_off=row_idx - 3, width=window_size, height=window_size)
+                        window = Window(col_off=col_idx - (window_size//2),
+                                        row_off=row_idx - (window_size//2),
+                                        width=window_size,
+                                        height=window_size)
 
                         # Read the data within the window
                         window_data = raster.read(1, window=window)
@@ -170,18 +189,14 @@ def createDatasetFunc(year_list,window_size,PeriodName):
 
                         if raster.name in (raster_paths[1],raster_paths[2],raster_paths[7]):  # Check for categorical data
 
-                            # Calculate the entropy of the window_values
-                            window_entropy = -np.sum(
-                                np.log2(np.maximum(window_values, np.finfo(float).eps)) * window_values) / window_values.size
-                            window_entropy = round(np.float64(window_entropy),6)
-
+                            window_entropy = calculate_entropy(window_values)
                             values.append(window_entropy)
 
                             # print(f' {raster.name}, window_entropy={window_entropy}')
                         else:
                             # Calculate the average and variance of the values within the window
-                            window_average = round(window_values.mean(),6)
-                            window_variance = round(window_values.var(),6)
+                            window_average = round(window_values.mean(),8)
+                            window_variance = round(window_values.var(),8)
                             values.append(window_average)
                             values.append(window_variance)
 
@@ -276,22 +291,23 @@ def loadDatSet(df,window_size):
     # else:
     #     print("Column -1 not found!")
 
-    # Normalize every column of df
-    # scaler = MinMaxScaler()
-    # df_normalized = pd.DataFrame(scaler.fit_transform(df), columns=df.columns)
-    #
-    # X = df_normalized.drop(['dust_storm'], axis=1)
-    # y = df_normalized['dust_storm']
-    # df_normalized.to_csv('training.csv', index=False)
-
-    X = df.drop(['dust_storm'], axis=1)
+    X_temp = df.drop(['dust_storm'], axis=1)
     y = df['dust_storm']
+    if NormalizeDataset:
+        X = X_temp
+        pass
+        # print(f'The data set is normalized with StandardScaler')
+        # columns_to_normalize = ['Precipitation', 'col2', 'col4']
+        #
+        # scaler = MinMaxScaler()
+        # X = pd.DataFrame(scaler.fit_transform(X_temp), columns=X_temp.columns)
+    else:
+        X = X_temp
+
     df.to_csv('training.csv', index=False)
     # Split data to 70% training, 20% testing
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=15)
-
-    return X_train,X_test,y_train,y_test,X, y
-
+    return X_train, X_test, y_train, y_test, X, y
 
 def fitTheModelXGboost(X_train, X_test, y_train, y_test,X, y):
     ###################################################################
@@ -303,12 +319,20 @@ def fitTheModelXGboost(X_train, X_test, y_train, y_test,X, y):
     params['num_class'] = 1
     params['eval_metric'] = 'auc'
     params['learning_rate'] = 0.02
-    # params['max_depth'] = 5
+
     # window size = 5: max_depth=7, window size = 7: max_depth=10
-    if window_size == 5:
-        params['max_depth'] = 7
-    if window_size == 7:
-        params['max_depth'] = 10
+    if window_size == 3:
+        params['max_depth'] = 5
+    elif window_size == 5:
+        params['max_depth'] = 8
+    elif window_size == 7:
+        params['max_depth'] = 11
+    elif window_size == 9:
+        params['max_depth'] = 11
+    elif window_size == 11:
+        params['max_depth'] = 11
+    else:
+        params['max_depth'] = 5
     params['min_child_weight'] = 2
     params['reg_alpha'] = 0.6
     params['reg_lambda'] = 0.7
