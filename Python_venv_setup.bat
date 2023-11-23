@@ -16,6 +16,7 @@ pip install numpy==1.26.2
 pip install pickles==0.1.1
 pip install pandas==2.1.3
 pip install xgboost==2.0.2
+pip install scipy==1.11.4
 
 REM Deactivate the virtual environment
 deactivate
