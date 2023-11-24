@@ -56,9 +56,9 @@ os.chdir("D:/University/DustStorming/ToAli/DustStormModeling/For training/")
 
 CreateDataSet = False  # True for creating a dataset from For training folder
 window_size = 7  # 0,3,5,7,9, ... for picking window size to search neighbor pixels of dust source
-FindBestParam = True  # True for finding the best hyperparameters
+FindBestParam = False  # True for finding the best hyperparameters
 year_list = list(range(2001, 2021))  # temporal duration to study 2021 is not included
-CalculateSeasons = True  # divide data in to 4 periods :
+CalculateSeasons = False  # divide data in to 4 periods :
 # First Period is Dry from 2000:2004
 # Second Period is Wet from 2005:2007
 # Third Period is Dry from 2008:2012
@@ -69,9 +69,9 @@ CalculateSeasons = True  # divide data in to 4 periods :
 EmptyDf = pd.DataFrame(columns=['Soil evaporation', 'Lakes', 'landcover', 'Precipitation', 'Soil moisture',
                                 'NDVI', 'Elevation', 'soil_type', 'Aspect', 'Curvature', 'Plan curvature',
                                 'Profile curvature', 'Distance to river', 'Slope', 'dust_storm'])
-numerical = {'average': True,
+numerical = {'Average': False,
              'Variance': True,
-             'Covariance': True,
+             'Covariance': False,
              'Median': True}
 
 categorical = {'Entropy': True,
@@ -82,7 +82,6 @@ Datatype = {'Soil evaporation': 'numerical', 'Lakes': 'categorical', 'landcover'
             'Elevation': 'numerical', 'soil_type': 'categorical', 'Aspect': 'numerical',
             'Curvature': 'numerical', 'Plan curvature': 'numerical', 'Profile curvature': 'numerical',
             'Distance to river': 'numerical', 'Slope': 'numerical', 'dust_storm': 'Label'}
-
 
 ###################################################################
 # #### Create Data set ############################################
@@ -127,7 +126,7 @@ def calculate_entropy(data):
     return entropy
 
 
-def createDatasetFunc(year_list,window_size,PeriodName):
+def createDatasetFunc(year_list,window_size,dustsourcespickle):
     if window_size == 0:
         df = EmptyDf
         dfs = []
@@ -234,7 +233,7 @@ def createDatasetFunc(year_list,window_size,PeriodName):
 
                         else:
 
-                            if numerical['average']:
+                            if numerical['Average']:
                                 window_average = round(window_values.mean(),8)
                                 values.append(window_average)
 
@@ -300,7 +299,7 @@ if CreateDataSet:
 
 
     if CalculateSeasons:
-        print(f'CalculateSeasons is set to {CreateDataSet}')
+        print(f'CalculateSeasons is set to {CalculateSeasons}')
         periods = [year_list[0:4],year_list[4:7],year_list[7:12],year_list[12:20]] # For Four Periods 2 Dry and 2Wet
         # periods = [year_list[0:4] + year_list[7:12], year_list[4:7] + year_list[12:20]] # FOr 2 Periods 1 Dry and 1 Wet
         for period in periods:
@@ -311,10 +310,6 @@ if CreateDataSet:
             # Third Period is Dry from 2008:2012
             # Fourth Period is Wet from 2012:2020
             PeriodName = len(year_list_period)
-
-            # Identify labels that are True
-
-            # Concatenate the first three characters with underscores
 
             dustsourcespickle = f'df_dustsources_WS{window_size}_X_{window_size}_PN{PeriodName}_SP_{statisticalParams}'
 
@@ -333,7 +328,6 @@ if CreateDataSet:
 
 def loadDatSet(df,window_size):
     print(f'windows size: {window_size}')
-
 
     # Replace the no data value with nan in the dataframe
     df.replace(-3.4028234663852886e+38, np.nan, inplace=True)
@@ -397,26 +391,49 @@ def fitTheModelXGboost(X_train, X_test, y_train, y_test,X, y):
     params['objective'] = 'binary:logistic'
     params['num_class'] = 1
     params['eval_metric'] = 'auc'
-    params['learning_rate'] = 0.02
-    # window size = 5: max_depth=7, window size = 7: max_depth=10
-    if window_size == 3:
-        params['max_depth'] = 5
-    elif window_size == 5:
-        params['max_depth'] = 8
-    elif window_size == 7:
-        params['max_depth'] = 11
-    elif window_size == 9:
-        params['max_depth'] = 11
-    elif window_size == 11:
-        params['max_depth'] = 11
+    if CalculateSeasons:
+        params['learning_rate'] = 0.02
+        # window size = 5: max_depth=7, window size = 7: max_depth=10
+        if window_size == 3:
+            params['max_depth'] = 5
+        elif window_size == 5:
+            params['max_depth'] = 8
+        elif window_size == 7:
+            params['max_depth'] = 11
+        elif window_size == 9:
+            params['max_depth'] = 11
+        elif window_size == 11:
+            params['max_depth'] = 11
+        else:
+            params['max_depth'] = 5
+        params['min_child_weight'] = 2
+        params['reg_alpha'] = 0.6
+        params['reg_lambda'] = 0.7
+        params['subsample'] = 0.7
+        params['gamma'] = 0.2
+        params['num_parallel_tree'] = 2
+
     else:
-        params['max_depth'] = 5
-    params['min_child_weight'] = 2
-    params['reg_alpha'] = 0.6
-    params['reg_lambda'] = 0.7
-    params['subsample'] = 0.7
-    params['gamma'] = 0.2
-    params['num_parallel_tree'] = 2
+        params['learning_rate'] = 0.01
+        # window size = 5: max_depth=7, window size = 7: max_depth=10
+        if window_size == 3:
+            params['max_depth'] = 5
+        elif window_size == 5:
+            params['max_depth'] = 8
+        elif window_size == 7:
+            params['max_depth'] = 11
+        elif window_size == 9:
+            params['max_depth'] = 11
+        elif window_size == 11:
+            params['max_depth'] = 11
+        else:
+            params['max_depth'] = 5
+        params['min_child_weight'] = 2
+        params['reg_alpha'] = 0.6
+        params['reg_lambda'] = 0.7
+        params['subsample'] = 0.7
+        params['gamma'] = 0.2
+        params['num_parallel_tree'] = 2
 
     # Create an XGBoost classifier with the hyperparameters dictionary
     xgb_model = xgb.XGBClassifier(**params)
@@ -480,7 +497,7 @@ def fitTheModelXGboost(X_train, X_test, y_train, y_test,X, y):
         print('\nThe cross validation accuracies of the model are', scores)
         print('The cross validation accuracy of the model is', np.mean(scores))
         print('\nThe windows size is', window_size)
-        print('\nThe results are for the years:', window_size)
+        print('\nThe results are for the years:', year_list)
     # Reset the standard output to the original
     sys.stdout = original_stdout
 
@@ -500,7 +517,7 @@ if CalculateSeasons:
     # periods = [year_list[0:4] + year_list[7:12], year_list[4:7] + year_list[12:20]]  # FOr 2 Periods 1 Dry and 1 Wet
     for period in periods:
         year_list_period = period
-        print(f'Calculating the priod:{year_list_period}')
+        print(f'Calculating the period:{year_list_period}')
         PeriodName = len(year_list_period)
         dustsourcespickle = f'df_dustsources_WS{window_size}_X_{window_size}_PN{PeriodName}_SP_{statisticalParams}'
         df = pk.load(open(f'{dustsourcespickle}.pickle', 'rb'))
@@ -509,7 +526,7 @@ if CalculateSeasons:
 else:
     print(f'CalculateSeasons is set to {CreateDataSet}')
     PeriodName = len(year_list)
-    print(f'Calculating the priod:{year_list}')
+    print(f'Calculating the period:{year_list}')
     dustsourcespickle = f'df_dustsources_WS{window_size}_X_{window_size}_PN{PeriodName}_SP_{statisticalParams}'
     df = pk.load(open(f'{dustsourcespickle}.pickle', 'rb'))
     X_train, X_test, y_train, y_test, X, y = loadDatSet(df, window_size)
