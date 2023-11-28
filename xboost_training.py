@@ -41,7 +41,7 @@ import numpy as np
 from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
 import math as m
 import pickle as pk
-from scipy.stats import skew, kurtosis
+from scipy.spatial.distance import cdist
 
 
 ###################################################################
@@ -54,11 +54,11 @@ os.chdir("D:/University/DustStorming/ToAli/DustStormModeling/For training/")
 # #### Default parameters #########################################
 ###################################################################
 
-CreateDataSet = False  # True for creating a dataset from For training folder
-window_size = 7  # 0,3,5,7,9, ... for picking window size to search neighbor pixels of dust source
+CreateDataSet = True  # True for creating a dataset from For training folder
+window_size = 9  # 0,3,5,7,9, ... for picking window size to search neighbor pixels of dust source
 FindBestParam = False  # True for finding the best hyperparameters
 year_list = list(range(2001, 2021))  # temporal duration to study 2021 is not included
-CalculateSeasons = False  # divide data in to 4 periods :
+CalculateSeasons = True  # divide data in to 4 periods :
 # First Period is Dry from 2000:2004
 # Second Period is Wet from 2005:2007
 # Third Period is Dry from 2008:2012
@@ -66,16 +66,19 @@ CalculateSeasons = False  # divide data in to 4 periods :
 
 # Predict_Year = 2020 # for the predicting the whole dataset set Predict_Year = year_list
 
-EmptyDf = pd.DataFrame(columns=['Soil evaporation', 'Lakes', 'landcover', 'Precipitation', 'Soil moisture',
-                                'NDVI', 'Elevation', 'soil_type', 'Aspect', 'Curvature', 'Plan curvature',
-                                'Profile curvature', 'Distance to river', 'Slope', 'dust_storm'])
-numerical = {'Average': False,
-             'Variance': True,
+numerical = {'Mean': False,
+             'WMean': True,
+             'Variance': False,
              'Covariance': False,
              'Median': True}
 
 categorical = {'Entropy': True,
-               'Mode': True}
+               'Mode': False}
+
+EmptyDf = pd.DataFrame(columns=['Soil evaporation', 'Lakes', 'landcover', 'Precipitation', 'Soil moisture',
+                                'NDVI', 'Elevation', 'soil_type', 'Aspect', 'Curvature', 'Plan curvature',
+                                'Profile curvature', 'Distance to river', 'Slope', 'dust_storm'])
+
 
 Datatype = {'Soil evaporation': 'numerical', 'Lakes': 'categorical', 'landcover': 'categorical',
             'Precipitation': 'numerical', 'Soil moisture': 'numerical', 'NDVI': 'numerical',
@@ -164,6 +167,7 @@ def createDatasetFunc(year_list,window_size,dustsourcespickle):
 
     else:
         dfs = []
+
         df = crete_data_frame(EmptyDf, numerical, categorical, Datatype)
         # Find the dust source for every year
         for year in year_list:
@@ -206,6 +210,28 @@ def createDatasetFunc(year_list,window_size,dustsourcespickle):
                         # Read the data within the window
                         window_data = raster.read(1, window=window)
 
+                        # Initialize an empty list to store pixel coordinates
+                        all_pixel_coordinates = []
+
+                        # Iterate over all column indices in the window
+                        for col_win in range(window.col_off, window.col_off + window.width):
+                            # Iterate over all row indices in the window
+                            for row_win in range(window.row_off, window.row_off + window.height):
+                                # Append the current pixel coordinate to the list
+                                if np.abs(window_data[row_win - window.row_off, col_win - window.col_off]) < 3.4028235e+30:
+                                    # print(f'row win = {row_win}')
+                                    # print(f'window.row_off = {window.width}')
+                                    # print(f'col_winn = {col_win}')
+                                    # print(f'window.col_off = {window.height}')
+                                    all_pixel_coordinates.append((col_win, row_win))
+
+                        # Convert the list to a NumPy array if needed
+                        all_pixel_coordinates = np.array(all_pixel_coordinates)
+                        if all_pixel_coordinates.size == 0:
+                            distances = np.zeros((1, window_size**2))
+                        else:
+                            distances = cdist([(col_idx, row_idx)], all_pixel_coordinates)
+
                         if np.any(np.isclose(window_data, -3.40282e+38)):  # check for any no data
                             window_masked = np.ma.masked_values(window_data, -3.40282e+38).compressed()
                         else:
@@ -232,10 +258,29 @@ def createDatasetFunc(year_list,window_size,dustsourcespickle):
                                     values.append(window_Mode)
 
                         else:
-
-                            if numerical['Average']:
+                            if numerical['Mean']:
                                 window_average = round(window_values.mean(),8)
                                 values.append(window_average)
+
+                            if numerical['WMean']:
+
+                                zero_indices = np.where(distances == 0)[1]
+                                if len(zero_indices) > 0:
+                                    # Remove the zero values from the distances array
+                                    distances = distances[distances != 0]
+                                    window_values_avr = np.delete(window_values, zero_indices)
+                                else:
+                                    window_values_avr = np.array(window_values)
+                                if np.all(distances == 0):
+                                    weighted_average = 0
+                                    values.append(weighted_average)
+                                else:
+                                    #     window_values = np.array(window_values)
+                                    weights = (1 / distances**2).flatten()
+
+                                    weighted_average = np.average(window_values_avr, weights=weights)
+                                    # window_average = round(window_values.mean(),8)
+                                    values.append(weighted_average)
 
                             if numerical['Variance']:
                                 window_variance = round(window_values.var(),8)
@@ -435,6 +480,8 @@ def fitTheModelXGboost(X_train, X_test, y_train, y_test,X, y):
         params['gamma'] = 0.2
         params['num_parallel_tree'] = 2
 
+
+
     # Create an XGBoost classifier with the hyperparameters dictionary
     xgb_model = xgb.XGBClassifier(**params)
 
@@ -542,7 +589,7 @@ if FindBestParam:
 
     #Define the parameter space to search over
     param_grid = {
-       'max_depth': np.arange(3, 5),
+       'max_depth': np.arange(8, 12),
        'min_child_weight': np.arange(1, 3),
        'subsample': np.arange(0.5, 0.9, 0.1),
        'gamma': np.arange(0, 0.6, 0.1),
@@ -554,14 +601,14 @@ if FindBestParam:
     # Create an instance of XGBoost classifier
     tuning_model = xgb.XGBClassifier(objective='binary:logistic', eval_metric='auc', n_jobs=-1)
 
-    gs = GridSearchCV(tuning_model, param_grid=param_grid, cv=4, n_jobs=2 )
-
-    gs.fit(X_train,y_train)
-
-    print(gs.best_params_)
+    # gs = GridSearchCV(tuning_model, param_grid=param_grid, cv=4, n_jobs=2 )
+    #
+    # gs.fit(X_train,y_train)
+    #
+    # print(gs.best_params_)
 
     # Create an instance of RandomizedSearchCV
-    rs = RandomizedSearchCV(tuning_model, param_distributions=param_grid, n_iter=400000, cv=4, verbose=2, random_state=42, n_jobs=-1)
+    rs = RandomizedSearchCV(tuning_model, param_distributions=param_grid, n_iter=400000, cv=4, verbose=0, random_state=42, n_jobs=-1)
 
     # Fit the model to the data
     rs.fit(X_train, y_train)
