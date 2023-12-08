@@ -55,9 +55,9 @@ To create the environment and install the required packages:
   - If the CreateDataSet = True
     - A dataset with the below naming pattren as *.pickle will be saved
   - If the CalculateSeasons = True
-    - For every season a dataset with the below naming pattren as *.pickle will be saved (PN number)
+    - For every season a dataset with the below naming pattern as *.pickle will be saved (PN number)
   - If FindBestParam = True
-    - The program does through Random search and grid search to hyper tune the parameters
+    - The program does Random search and grid search to hyper tune the parameters
     - It is a time consuming task and can vary from 5 hours to 48 hours depend on the settings and param range
 - The name of he file will be shown in the Run console just copy the name search it in the folder
 - The naming will be like:
