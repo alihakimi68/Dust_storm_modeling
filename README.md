@@ -13,6 +13,8 @@ To create the environment and install the required packages:
       - conda list -n Dstorm_311
 
 ## required packages:
+
+- The code runs under Python version 3.11 with below packages
   - geopandas==0.14.1
   - rasterio==1.3.9
   - matplotlib==3.8.1
