@@ -48,10 +48,13 @@ To create the environment and install the required packages:
                'Mode': False}
 
 ## After modeling is finished
-- Results will be saved in below format
+
+- Results will be saved in below format in the "For training" folder
+- The name of he file will be shown just copy the name search it in the folder
+- The naming will be like:
   - WS = windows size 0,3,5,7,9,...
   - PN = period number (20 for all years,4: First Period is Dry from 2000:2004, 3:Second Period is Wet from 2005:2007, 5: Third Period is Dry from 2008:2012, 8:Fourth Period is Wet from 2012:2020 )
   - SP = Statistical Parameters : AVR:Average, VAR: Variance, MED: Median, COV: Covariance, ENT: Entropy, MOD: Mode
-- the the result will be shonw in the as figure and text
-  -   Figure shows the feature importance
-  -   Text shows the accuracy, F1 score, Recall, precision, cross validation results
+- The results will be shown and saved as figure and text
+  - Figure shows the feature importance
+  - Text shows the accuracy, F1 score, Recall, precision, confiusion matrix, cross validation results
