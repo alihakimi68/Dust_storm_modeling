@@ -31,7 +31,7 @@ To create the environment and install the required packages:
     - window_size = 3  # 3,5,7 ... for picking window size to search neighbor pixels of dust source
     - FindBestParam = False  # True for finding the best hyperparameters
     - year_list = list(range(2001, 2021))  # temporal duration to study 2021 is not included
-    - CalculateSeasons = True  # divide data in to 4 periods :
+    - CalculateSeasons = False  # True divides data in to 4 periods :
       - First Period is Dry from 2000:2004
       - Second Period is Wet from 2005:2007
       - Third Period is Dry from 2008:2012
@@ -48,9 +48,15 @@ To create the environment and install the required packages:
                'Mode': False}
 
 ## After modeling is finished
-
 - Results will be saved in below format in the "For training" folder
-- The name of he file will be shown just copy the name search it in the folder
+  - If the CreateDataSet = True
+    - A dataset with the below naming pattren as *.pickle will be saved
+  - If the CalculateSeasons = True
+    - For every season a dataset with the below naming pattren as *.pickle will be saved (PN number)
+  - If FindBestParam = True
+    - The program does through Random search and grid search to hyper tune the parameters
+    - It is a time consuming task and can vary from 5 hours to 48 hours depend on the settings and param range
+- The name of he file will be shown in the Run console just copy the name search it in the folder
 - The naming will be like:
   - WS = windows size 0,3,5,7,9,...
   - PN = period number (20 for all years,4: First Period is Dry from 2000:2004, 3:Second Period is Wet from 2005:2007, 5: Third Period is Dry from 2008:2012, 8:Fourth Period is Wet from 2012:2020 )
