@@ -1,8 +1,8 @@
 @echo off
 
 REM Create a conda environment named Dstorm_311 and install required packages
-call conda create --name Dstorm_311_test python=3.11 -y
-call conda activate Dstorm_311_test
+call conda create --name Dstorm_311 python=3.11 -y
+call conda activate Dstorm_311
 
 REM Install required packages
 pip install geopandas==0.14.1
