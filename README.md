@@ -50,6 +50,7 @@ To create the environment and install the required packages:
                'Mode': False}
 
 ## After modeling is finished
+- To rerun the project from already saved *.pickle file just select the statistical parameters, window size, CalculateSeasons and put CreateDataSet = False
 - Results will be saved in below format in the "For training" folder
   - If the CreateDataSet = True
     - A dataset with the below naming pattren as *.pickle will be saved
