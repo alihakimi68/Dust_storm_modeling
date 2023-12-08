@@ -31,10 +31,10 @@ To create the environment and install the required packages:
     - FindBestParam = False  # True for finding the best hyperparameters
     - year_list = list(range(2001, 2021))  # temporal duration to study 2021 is not included
     - CalculateSeasons = True  # divide data in to 4 periods :
-      ### First Period is Dry from 2000:2004
-      ### Second Period is Wet from 2005:2007
-      ### Third Period is Dry from 2008:2012
-      ### Fourth Period is Wet from 2012:2020
+      - First Period is Dry from 2000:2004
+      - Second Period is Wet from 2005:2007
+      - Third Period is Dry from 2008:2012
+      - Fourth Period is Wet from 2012:2020
     - Select which type of statistical parameters should be calculated as input feature
 
       numerical = {'Mean': False,
