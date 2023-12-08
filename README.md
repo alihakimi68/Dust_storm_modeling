@@ -21,6 +21,7 @@ To create the environment and install the required packages:
   - pickles==0.1.1
   - pandas==2.1.3
   - xgboost==2.0.2
+  - scipy==1.11.4
 
 ## After installation run the xboost_training.py file
 
