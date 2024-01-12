@@ -1,8 +1,8 @@
 Accuracy	Precision	Recall	F1-score	True negative	False positive	False negative	True positive	AUC
-85.38%	82.70%	86.44%	84.53%	174	32	24	153	85.45%
+81.87%	84.07%	80.53%	82.26%	145	29	37	153	81.93%
 
-The cross validation accuracies of the model are [0.79373368 0.8537859  0.80939948 0.8381201  0.80104712]
-The cross validation accuracy of the model is 0.8192172569819419
+The cross validation accuracies of the model are [0.78296703 0.83516484 0.80440771 0.85950413 0.80991736]
+The cross validation accuracy of the model is 0.8183922138467594
 
 The windows size is 7
 
