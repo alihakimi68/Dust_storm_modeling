@@ -1,0 +1,2 @@
+Accuracy	Precision	Recall	F1-score	True negative	False positive	False negative	True positive	AUC
+80.70%	82.35%	84.85%	83.58%	18	6	5	28	79.92%
