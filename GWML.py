@@ -58,14 +58,14 @@ dframe_full = train_valid_df.copy()
 obs = len(dframe_full)
 params = {}
 if Model == 'RF':
-    params['n_estimators'] = 676
+    params['n_estimators'] = 1113
     params['max_depth'] = 8
     params['max_features'] = 8
     params['random_state'] = 42
     params['criterion'] = 'entropy'
 
-    # params['min_samples_leaf'] = 8
-    # params['min_samples_split'] = 3
+    # params['min_samples_leaf'] = 1
+    # params['min_samples_split'] = 2
     # params['bootstrap'] = True
 
 
@@ -84,7 +84,6 @@ else:
     params['num_parallel_tree'] = 2
 
     Gl_Model = xgb.XGBClassifier(**params)
-# params['min_samples_split'] = 2
 
 Gl_Model.fit(X_train, y_train)
 y_pred = Gl_Model.predict(X_test)
@@ -108,6 +107,7 @@ print('Confusion matrix:\n True negative: %s \
       % (conf_matrix[0, 0], conf_matrix[0, 1], conf_matrix[1, 0], conf_matrix[1, 1]))
 print('AUC: {:.2f}%'.format(auc * 100))
 
+# Global Model Feature Importance
 feature_importances = Gl_Model.feature_importances_ * 100
 
 feature_names = X_train.columns
@@ -118,14 +118,14 @@ sorted_feature_importances = feature_importances[sorted_indices]
 sorted_feature_names = [feature_names[i] for i in sorted_indices]
 
 # Plotting
-plt.figure(figsize=(10, 6))
-plt.bar(range(len(feature_importances)), sorted_feature_importances, align="center")
-plt.xticks(range(len(feature_importances)), sorted_feature_names, rotation=45)
-plt.xlabel("Feature")
-plt.ylabel("Feature Importance (%)")
-plt.title("Feature Importance Plot")
-plt.tight_layout()
-plt.show()
+# plt.figure(figsize=(10, 6))
+# plt.bar(range(len(feature_importances)), sorted_feature_importances, align="center")
+# plt.xticks(range(len(feature_importances)), sorted_feature_names, rotation=45)
+# plt.xlabel("Feature")
+# plt.ylabel("Feature Importance (%)")
+# plt.title("Feature Importance Plot")
+# plt.tight_layout()
+# plt.show()
 
 # Set the importance threshold
 importance_threshold = 0
@@ -143,6 +143,7 @@ Dij = squareform(distance_array)
 
 kernel = 'adaptive'
 bw = 140
+mincatobs = 6
 if kernel == 'adaptive':
     Ne = bw
     print(f"Kernel: Adaptive\nNeighbours: {Ne}")
@@ -176,7 +177,7 @@ def bootstrapWeighted(X_train, y_train, case_weights):
     X_train_weighted = X_train.iloc[bootstrap_indices]
     y_train_weighted = y_train.iloc[bootstrap_indices]
 
-    while len(y_train_weighted.unique()) < 2 or any(y_train_weighted.value_counts() < 1):
+    while len(y_train_weighted.unique()) < 2:
         # Select the first 80% of indices without replacement based on case weights
         bootstrap_indices = np.random.choice(num_samples, num_bootstrap_samples, replace=True,
                                              p=case_weights / np.sum(case_weights))
@@ -187,21 +188,41 @@ def bootstrapWeighted(X_train, y_train, case_weights):
         X_train_weighted = X_train.iloc[bootstrap_indices]
         y_train_weighted = y_train.iloc[bootstrap_indices]
 
+    # case_weights = case_weights.iloc[bootstrap_indices]
+
     # Save out-of-bag samples
     X_OOB = X_train.iloc[oob_indices]
     y_OOB = y_train.iloc[oob_indices]
 
+    # Identify and count duplicates based on 'Point_ID'
+    duplicate_counts = X_train_weighted['pointID'].value_counts()
+
+    # Remove duplicates based on 'Point_ID'
+    X_train_unique = X_train_weighted.drop_duplicates('pointID')
+    X_train_indices = X_train_unique.index
+
+    y_train_weighted = y_train_weighted[~y_train_weighted.index.duplicated(keep='first')]
+
+    # Reindex y_train_weighted
+    y_train_unique = y_train_weighted.reindex(X_train_indices)
+
+    # case_weights = case_weights.loc[X_train_indices]
+
+    # Create a weight list based on the number of duplicates
+    duplicate_weights = X_train_unique['pointID'].map(duplicate_counts)
+
+    # Sample_eights = case_weights * duplicate_weights
+
+    return X_train_unique, y_train_unique, X_OOB, y_OOB, duplicate_weights
 
 
-    return X_train_weighted, y_train_weighted, X_OOB, y_OOB
-
-
-for m in range(0,obs):
+for m in range(0,100):
     # Get the data
     DNeighbour = Dij[:, m]
 
     # Add 'pointID' column to 'dframe'
     dframe['pointID'] = range(0, len(dframe))
+    coords['pointID'] = range(0, len(dframe))
 
     # Create a new DataFrame 'DataSet' with 'dframe' and 'DNeighbour'
     DataSet = pd.DataFrame({'DNeighbour': DNeighbour})
@@ -216,22 +237,49 @@ for m in range(0,obs):
         SubSet = DataSetSorted.iloc[:Ne, :]
 
         # Make sure there is at least one type of both labels in the subset
-        while len(SubSet['dust_storm'].unique()) < 2 or any(SubSet['dust_storm'].value_counts() < 6):
+        while len(SubSet['dust_storm'].unique()) < 2 or any(SubSet['dust_storm'].value_counts() < mincatobs):
             SubSet = DataSetSorted.iloc[:Ne + cc, :]
             cc += 1
+        if cc > 1 :
+
+            # before_removal_coords = pd.merge(SubSet, coords, on='pointID', how='left')
+
+            value_counts = SubSet['dust_storm'].value_counts()
+            max_category = value_counts.idxmax()
+
+            # Calculate the probabilities based on 'DNeighbour'
+            probabilities = SubSet['DNeighbour'] / SubSet['DNeighbour'].sum()
+
+            # Ensure that the indices to remove contain rows with max_category
+            max_category_indices = SubSet[SubSet['dust_storm'] == max_category].index
+            # Generate random indices with higher probability for higher 'DNeighbour' values
+            remove_indices = np.random.choice(max_category_indices, size=len(max_category_indices) - (bw -mincatobs), replace=False,
+                                              p=probabilities.loc[max_category_indices] / probabilities.loc[
+                                                  max_category_indices].sum())
+
+            # Remove the selected rows
+            SubSet = SubSet.drop(remove_indices)
 
         Kernel_H = SubSet['DNeighbour'].max()
     elif kernel == 'fixed':
         SubSet = DataSetSorted[DataSetSorted['DNeighbour'] <= bw]
         Kernel_H = bw
 
+    # after_removal_coords = pd.merge(SubSet, coords, on='pointID', how='left')
+    # Plotting
+    # plt.figure(figsize=(10, 6))
+    # plt.scatter(before_removal_coords['X'], before_removal_coords['Y'], color='blue',
+    #             label='Before Removal')
+    # plt.scatter(after_removal_coords['X'], after_removal_coords['Y'], color='red', label='After Removal')
+    # plt.title('Coords pointID Before and After Removal')
+    # plt.xlabel('Longitude')
+    # plt.ylabel('Latitude')
+    # plt.legend()
+    # plt.show()
     ######################################
-    # random_seed = 42
-    # np.random.seed(random_seed)
 
+    # Split training and test data
     train_indices = np.random.choice(len(SubSet['dust_storm']), size=int(0.8 * len(SubSet['dust_storm'])), replace=False)
-
-    # train_indices = [index - 1 for index in train_indices]
 
     SubSet_train = SubSet.iloc[train_indices]
     train_indices_np = np.array(train_indices)
@@ -244,13 +292,11 @@ for m in range(0,obs):
     y_train_l = SubSet_train['dust_storm']
     y_test_l = SubSet_valid['dust_storm']
 
-    while len(y_train_l.unique()) < 2 or len(y_test_l.unique()) < 2 or any(y_train_l.value_counts() < 3) or any(
-            y_test_l.value_counts() < 3):
+    # Make sure there is at least one type of both labels in the Training data
+    while len(y_train_l.unique()) < 2:
         random_integer = random.randint(15, 45)
         train_indices = np.random.choice(len(SubSet['dust_storm']), size=int(0.8 * len(SubSet['dust_storm'])),
                                          replace=False)
-
-        # train_indices = [index - 1 for index in train_indices]
 
         SubSet_train = SubSet.iloc[train_indices]
         train_indices_np = np.array(train_indices)
@@ -279,17 +325,16 @@ for m in range(0,obs):
     #                                                                 random_state=random_integer)
 
     # Bi-square weights
-    Wts_train = (1 - (X_train_l['DNeighbour'] / Kernel_H) ** 2) ** 2
+    # Wts_train = (1 - (X_train_l['DNeighbour'] / Kernel_H) ** 2) ** 2
     # Gaussian weights
-    # Wts_train = np.exp(-(X_train_l['DNeighbour']**2) / (2 * Kernel_H**2))
+    Wts_train = np.exp(-(X_train_l['DNeighbour']**2) / (2 * Kernel_H**2))
 
     # Use bootstrapWeighted to get weighted samples
-    X_train_l_weighted, y_train_l_weighted, X_OOB, y_OOB = bootstrapWeighted(X_train_l,
+    X_train_l_weighted, y_train_l_weighted, X_OOB, y_OOB , case_weights = bootstrapWeighted(X_train_l,
                                                                              y_train_l, Wts_train)
 
+    # Drop the pointID
     X_train_l_noPID = X_train_l_weighted.drop(['pointID'], axis=1)
-    # X_train_l_noPID = X_train_l.drop(['pointID'], axis=1)
-
     X_test_l_noPID = X_test_l.drop(['pointID'], axis=1)
     X_OOB_noPID = X_OOB.drop(['pointID'], axis=1)
 
@@ -297,6 +342,7 @@ for m in range(0,obs):
     train_sort_index = X_train_l_noPID['DNeighbour'].sort_values().index
     X_train_l_noPID = X_train_l_noPID.loc[train_sort_index]
     y_train_l_weighted = y_train_l_weighted.loc[train_sort_index]
+    case_weights = case_weights.loc[train_sort_index]
 
     # Sort X_test_l_noPID and y_test_l based on 'DNeighbour'
     test_sort_index = X_test_l_noPID['DNeighbour'].sort_values().index
@@ -308,6 +354,7 @@ for m in range(0,obs):
     X_OOB_noPID = X_OOB_noPID.loc[test_sort_index]
     y_OOB = y_OOB.loc[test_sort_index]
 
+    # Drop the DNeighbour
     # X_train_l_noPID = X_train_l_noPID.drop(['DNeighbour'], axis=1)
     # X_test_l_noPID = X_test_l_noPID.drop(['DNeighbour'], axis=1)
     # X_OOB_noPID = X_OOB_noPID.drop(['DNeighbour'], axis=1)
@@ -328,9 +375,9 @@ for m in range(0,obs):
         # Create a dictionary of class weights
         class_weights = {0: weight_class_0_normalized, 1: weight_class_1_normalized}
 
-        params['class_weight'] = 'balanced'
+        params['class_weight'] = class_weights
         params['n_jobs'] = -1
-        params['bootstrap'] = True
+        # params['bootstrap'] = True
         LO_Model = RandomForestClassifier(**params)
 
     else:
@@ -339,8 +386,7 @@ for m in range(0,obs):
         LO_Model = xgb.XGBClassifier(**params)
 
     # FIT THE MODEL TO THE TRAINING DATA
-    # LO_Model.fit(X_train_l_noPID, y_train_l)
-    LO_Model.fit(X_train_l_noPID, y_train_l_weighted)
+    LO_Model.fit(X_train_l_noPID, y_train_l_weighted, sample_weight = case_weights)
 
     ##### TEST PREDICTION ####
     y_pred_l_ = LO_Model.predict(X_test_l_noPID)
