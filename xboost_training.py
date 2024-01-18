@@ -54,11 +54,11 @@ os.chdir("D:/University/DustStorming/ToAli/DustStormModeling/For training/")
 # #### Default parameters #########################################
 ###################################################################
 
-CreateDataSet = True  # True for creating a dataset from For training folder
-window_size = 9  # 0,3,5,7,9, ... for picking window size to search neighbor pixels of dust source
+CreateDataSet = False  # True for creating a dataset from For training folder
+window_size = 0  # 0,3,5,7,9, ... for picking window size to search neighbor pixels of dust source
 FindBestParam = False  # True for finding the best hyperparameters
 year_list = list(range(2001, 2021))  # temporal duration to study 2021 is not included
-CalculateSeasons = True  # divide data in to 4 periods :
+CalculateSeasons = False  # divide data in to 4 periods :
 # First Period is Dry from 2000:2004
 # Second Period is Wet from 2005:2007
 # Third Period is Dry from 2008:2012
@@ -67,24 +67,26 @@ CalculateSeasons = True  # divide data in to 4 periods :
 # Predict_Year = 2020 # for the predicting the whole dataset set Predict_Year = year_list
 
 numerical = {'Mean': False,
-             'WMean': True,
+             'WMean': False,
              'Variance': False,
              'Covariance': False,
-             'Median': True}
+             'Median': False}
 
-categorical = {'Entropy': True,
+categorical = {'Entropy': False,
                'Mode': False}
 
-EmptyDf = pd.DataFrame(columns=['Soil evaporation', 'Lakes', 'landcover', 'Precipitation', 'Soil moisture',
-                                'NDVI', 'Elevation', 'soil_type', 'Aspect', 'Curvature', 'Plan curvature',
-                                'Profile curvature', 'Distance to river', 'Slope', 'dust_storm'])
+EmptyDf = pd.DataFrame(columns=['Soil_evaporation', 'Lakes', 'landcover', 'Precipitation', 'Soil_moisture',
+                                'NDVI', 'Elevation', 'soil_type', 'Aspect', 'Curvature', 'Plan_curvature',
+                                'Profile_curvature', 'Distance_to_river', 'Slope', 'dust_storm',
+                                'Year','X','Y'])
 
 
-Datatype = {'Soil evaporation': 'numerical', 'Lakes': 'categorical', 'landcover': 'categorical',
+Datatype = {'Soil_evaporation': 'numerical', 'Lakes': 'categorical', 'landcover': 'categorical',
             'Precipitation': 'numerical', 'Soil moisture': 'numerical', 'NDVI': 'numerical',
             'Elevation': 'numerical', 'soil_type': 'categorical', 'Aspect': 'numerical',
-            'Curvature': 'numerical', 'Plan curvature': 'numerical', 'Profile curvature': 'numerical',
-            'Distance to river': 'numerical', 'Slope': 'numerical', 'dust_storm': 'Label'}
+            'Curvature': 'numerical', 'Plan_curvature': 'numerical', 'Profile_curvature': 'numerical',
+            'Distance_to_river': 'numerical', 'Slope': 'numerical', 'dust_storm': 'Label',
+            'Year':'Year','X':'X','Y':'Y'}
 
 ###################################################################
 # #### Create Data set ############################################
@@ -157,6 +159,9 @@ def createDatasetFunc(year_list,window_size,dustsourcespickle):
                         value = next(raster.sample([point]))[0]
                         values.append(value)
                 values.append(row['ID'])
+                values.append(year)
+                values.append(point[0])
+                values.append(point[1])
                 temp_df = pd.DataFrame([values], columns=df.columns)
                 dfs.append(temp_df)
 
@@ -190,6 +195,7 @@ def createDatasetFunc(year_list,window_size,dustsourcespickle):
             for i, row in dust_storms.iterrows():
                 point = (row.geometry.x, row.geometry.y)
                 values = []
+
                 flattenWindow = []
 
                 for raster_path in raster_paths:
@@ -287,6 +293,7 @@ def createDatasetFunc(year_list,window_size,dustsourcespickle):
                                 values.append(window_variance)
 
                             if numerical['Covariance']:
+
                                 if len(window_values) == window_size**2:
                                     window_matrix = window_values.reshape((window_size, window_size))
 
@@ -301,31 +308,40 @@ def createDatasetFunc(year_list,window_size,dustsourcespickle):
                                     covariance_value = 0
                                 values.append(covariance_value)
 
+                                # if len(window_values) == window_size**2:
+                                #     window_matrix = window_values.reshape((window_size, window_size))
+                                #     # Calculate the covariance matrix with weights (distances)
+                                #     print(window_matrix)
+                                #
+                                #     weights = 1 / distances.flatten()**2
+                                #     weights = np.nan_to_num(weights, nan=0.0, posinf=0.0, neginf=0.0)
+                                #     weights = weights.reshape(window_values.shape)
+                                #
+                                #     # Print the sizes for debugging
+                                #     print("Size of window_matrix:", window_matrix.shape)
+                                #     print("Size of weights:", weights.shape)
+                                #     covariance_matrix = np.cov(window_matrix, aweights=weights)
+                                #
+                                #     # if np.any(np.isnan(covariance_matrix)):
+                                #     #     covariance_value = 0
+                                #     # else:
+                                #     covariance_value = covariance_matrix[window_size // 2, window_size // 2]
+                                # else:
+                                #     covariance_value = 0
+
+
+
                             if numerical['Median']:
                                 window_median = np.median(window_values)
                                 window_median = window_median.astype(np.float32)
                                 values.append(window_median)
 
-                            # # Calculate the correlation coefficient matrix
-                            # correlation_matrix = np.corrcoef(window_matrix)
-                            #
-                            # if np.any(np.isnan(correlation_matrix)):
-                            #     correlation_coefficient = 0
-                            # else:
-                            #     # Check for very small standard deviations to avoid division by almost zero
-                            #     std_dev_threshold = 1e-10
-                            #     if np.any(np.abs(np.std(window_matrix, axis=0)) < std_dev_threshold) or np.any(
-                            #             np.abs(np.std(window_matrix, axis=1)) < std_dev_threshold):
-                            #         correlation_coefficient = 0
-                            #     else:
-                            #         correlation_coefficient = np.mean(correlation_matrix)
-                            # values.append(correlation_coefficient)
-
-
                             # print(f'{raster.name}, window_average={window_average}, window_variance={window_variance}')
 
                 values.append(row['ID'])
-                # values.append(year)
+                values.append(year)
+                values.append(point[0])
+                values.append(point[1])
 
                 temp_df = pd.DataFrame([values], columns=df.columns)
                 dfs.append(temp_df)
@@ -335,45 +351,6 @@ def createDatasetFunc(year_list,window_size,dustsourcespickle):
             df = pd.concat(dfs, ignore_index=True)
         # print(df.dtypes)
 
-    pk.dump(df, open(f'{dustsourcespickle}.pickle','wb'))
-
-
-if CreateDataSet:
-    print(f'CreateDataSet is set to {CreateDataSet}')
-
-
-
-    if CalculateSeasons:
-        print(f'CalculateSeasons is set to {CalculateSeasons}')
-        periods = [year_list[0:4],year_list[4:7],year_list[7:12],year_list[12:20]] # For Four Periods 2 Dry and 2Wet
-        # periods = [year_list[0:4] + year_list[7:12], year_list[4:7] + year_list[12:20]] # FOr 2 Periods 1 Dry and 1 Wet
-        for period in periods:
-            year_list_period = period
-            print(f'Creating Data set for {year_list_period}')
-            # First Period is Dry from 2000:2004
-            # Second Period is Wet from 2005:2007
-            # Third Period is Dry from 2008:2012
-            # Fourth Period is Wet from 2012:2020
-            PeriodName = len(year_list_period)
-
-            dustsourcespickle = f'df_dustsources_WS{window_size}_X_{window_size}_PN{PeriodName}_SP_{statisticalParams}'
-
-            createDatasetFunc(year_list_period, window_size,dustsourcespickle)
-    else:
-        print(f'CalculateSeasons is set to {CreateDataSet}')
-        PeriodName = len(year_list)
-        print(f'Creating Data set for {year_list}')
-        dustsourcespickle = f'df_dustsources_WS{window_size}_X_{window_size}_PN{PeriodName}_SP_{statisticalParams}'
-        createDatasetFunc(year_list, window_size,dustsourcespickle)
-
-###################################################################
-# #### Load Data set ##############################################
-###################################################################
-
-
-def loadDatSet(df,window_size):
-    print(f'windows size: {window_size}')
-
     # Replace the no data value with nan in the dataframe
     df.replace(-3.4028234663852886e+38, np.nan, inplace=True)
 
@@ -381,9 +358,10 @@ def loadDatSet(df,window_size):
     dust_storm_counts = df['dust_storm'].value_counts()
 
     # Define the mapping dictionary for each dataset
-    landuse_mapping = {0: 'Water', 1: 'Natural vegetation', 3: 'Cropland', 4: 'Urban', 6: 'Bare Soil'}
-    soil_type_mapping = {0: 'Silt', 1: 'Clay', 2: 'Silt Clay', 3: 'Sand Clay', 4: 'Clay Loam', 5: 'Silt Clay Loam',
-                         6: 'Sand Clay Loam', 7: 'Loam', 8: 'Silt Loam', 9: 'Sand Loam', 11: 'Loam Sand', 12: 'Sand'}
+    landuse_mapping = {0: 'Water', 1: 'Natural_vegetation', 3: 'Cropland', 4: 'Urban', 6: 'Bare_Soil'}
+    soil_type_mapping = {0: 'Silt', 1: 'Clay', 2: 'Silt_Clay', 3: 'Sand_Clay', 4: 'Clay_Loam', 5: 'Silt_Clay_Loam',
+                         6: 'Sand_Clay_Loam', 7: 'Loam', 8: 'Silt_Loam', 9: 'Sand_Loam', 11: 'Loam_Sand',
+                         12: 'Sand'}
 
     # Replace the numerical values with their corresponding category names for dataset1
     df.replace({'landcover': landuse_mapping, 'soil_type': soil_type_mapping}, inplace=True)
@@ -404,25 +382,80 @@ def loadDatSet(df,window_size):
     df = pd.concat([df, dummy_df], axis=1)
 
     # drop original categorical columns
-    df = df.drop(columns=['landcover', 'soil_type'])
+    df = df.drop(columns=['X','Y','Year','landcover', 'soil_type'])
 
     # drop not important columns
-    df = df.drop(columns=['Water', 'Clay', 'Silt', 'Silt Loam', 'Silt Clay', 'Sand Clay', 'Silt Clay Loam', 'Urban'])
+    df = df.drop(
+        columns=['Water', 'Clay', 'Silt', 'Silt_Loam', 'Silt_Clay', 'Sand_Clay', 'Silt_Clay_Loam', 'Urban'])
 
     if 255.0 in df.columns:
         df.drop(255.0, axis=1, inplace=True)
     # else:
     #     print("Column 255.0 not found!")
 
+    if (255 in df.values):
+        # Drop rows containing -1 in any attribute
+        df = df[df.apply(lambda row: 255 not in row.values, axis=1)]
+
     if -1 in df.columns:
         df.drop(-1, axis=1, inplace=True)
-    # else:
-    #     print("Column -1 not found!")
+
+    if (-1 in df.values):
+        # Drop rows containing -1 in any attribute
+        df = df[df.apply(lambda row: -1 not in row.values, axis=1)]
+
+    if df.isna().any().any():
+        # Drop rows containing NaN values in any attribute
+        df = df.dropna()
+
+
+    pk.dump(df, open(f'{dustsourcespickle}.pickle','wb'))
+
+
+if CreateDataSet:
+    print(f'CreateDataSet is set to {CreateDataSet}')
+
+    if CalculateSeasons:
+        print(f'CalculateSeasons is set to {CalculateSeasons}')
+        periods = [year_list[0:4],year_list[4:7],year_list[7:12],year_list[12:20]] # For Four Periods 2 Dry and 2Wet
+        # periods = [year_list[0:4] + year_list[7:12], year_list[4:7] + year_list[12:20]] # FOr 2 Periods 1 Dry and 1 Wet
+        for period in periods:
+            year_list_period = period
+            print(f'Creating Data set for {year_list_period}')
+            # First Period is Dry from 2000:2004
+            # Second Period is Wet from 2005:2007
+            # Third Period is Dry from 2008:2012
+            # Fourth Period is Wet from 2012:2020
+            PeriodName = len(year_list_period)
+
+            dustsourcespickle = f'df_dustsources_WS{window_size}_X_{window_size}_PN{PeriodName}_SP_{statisticalParams}'
+
+            createDatasetFunc(year_list_period, window_size,dustsourcespickle)
+    else:
+        print(f'CalculateSeasons is set to {CalculateSeasons}')
+        PeriodName = len(year_list)
+        print(f'Creating Data set for {year_list}')
+        dustsourcespickle = f'df_dustsources_WS{window_size}_X_{window_size}_PN{PeriodName}_SP_{statisticalParams}'
+        createDatasetFunc(year_list, window_size,dustsourcespickle)
+
+###################################################################
+# #### Load Data set ##############################################
+###################################################################
+
+
+def loadDatSet(df,window_size):
+    print(f'windows size: {window_size}')
 
     X = df.drop(['dust_storm'], axis=1)
-    y = df['dust_storm']
+    # X = df.drop(['dust_storm','Lakes entropy','Loam Sand','Sand Clay Loam','Clay Loam',
+    #              'Bare Soil','Cropland','Natural vegetation','Lakes mode','Precipitation median'], axis=1)
 
-    df.to_csv('training.csv', index=False)
+    y = df['dust_storm']
+    value_counts = y.value_counts()
+
+    print(f'number of dust sources {value_counts.get(1, 0)}')
+    print(f'number of none dust sources {value_counts.get(0, 0)}')
+    df.to_csv(f'{dustsourcespickle}.csv', index=False)
     # Split data to 70% training, 20% testing
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=15)
     return X_train, X_test, y_train, y_test, X, y
@@ -436,7 +469,36 @@ def fitTheModelXGboost(X_train, X_test, y_train, y_test,X, y):
     params['objective'] = 'binary:logistic'
     params['num_class'] = 1
     params['eval_metric'] = 'auc'
-    if CalculateSeasons:
+
+    if dustsourcespickle == 'df_dustsources_WS5_X_5_PN3_SP_Mea_WMe_Var_Cov_Med_Ent_Mod.pickle':
+        # Hyper tuning for df_dustsources_WS5_X_5_PN3_SP_Mea_WMe_Var_Cov_Med_Ent_Mod.pickle
+        # GridSearchCV Best Parameters
+        # {'gamma': 0.1, 'learning_rate': 0.01, 'max_depth': 7, 'min_child_weight': 2, 'reg_alpha': 0.8999999999999999, 'reg_lambda': 0.7999999999999999, 'subsample': 0.6}
+        # RandomizedSearchCV Best Parameters
+        # Best hyperparameters: {'subsample': 0.6, 'reg_lambda': 0.7999999999999999, 'reg_alpha': 0.8999999999999999, 'min_child_weight': 2, 'max_depth': 7, 'learning_rate': 0.01, 'gamma': 0.1}
+        params['learning_rate'] = 0.01
+        params['max_depth'] = 7
+        params['min_child_weight'] = 2
+        params['reg_alpha'] = 0.8999999999999999
+        params['reg_lambda'] = 0.7999999999999999
+        params['subsample'] = 0.6
+        params['gamma'] = 0.1
+        params['num_parallel_tree'] = 2
+    elif dustsourcespickle == 'df_dustsources_WS7_X_7_PN3_SP_Mea_WMe_Var_Cov_Med_Ent_Mod.pickle':
+        # Hyper tuning for df_dustsources_WS7_X_7_PN3_SP_Mea_WMe_Var_Cov_Med_Ent_Mod.pickle
+        # GridSearchCV Best Parameters
+        # {'gamma': 0.0, 'learning_rate': 0.01, 'max_depth': 7, 'min_child_weight': 2, 'reg_alpha': 0.5, 'reg_lambda': 0.4, 'subsample': 0.7999999999999999}
+        # RandomizedSearchCV Best Parameters
+        # Best hyperparameters: {'subsample': 0.7999999999999999, 'reg_lambda': 0.4, 'reg_alpha': 0.5, 'min_child_weight': 2, 'max_depth': 7, 'learning_rate': 0.01, 'gamma': 0.0}
+        params['learning_rate'] = 0.01
+        params['max_depth'] = 7
+        params['min_child_weight'] = 2
+        params['reg_alpha'] = 0.5
+        params['reg_lambda'] = 0.4
+        params['subsample'] = 0.7999999999999999
+        params['gamma'] = 0
+        params['num_parallel_tree'] = 2
+    elif CalculateSeasons:
         params['learning_rate'] = 0.02
         # window size = 5: max_depth=7, window size = 7: max_depth=10
         if window_size == 3:
@@ -457,7 +519,6 @@ def fitTheModelXGboost(X_train, X_test, y_train, y_test,X, y):
         params['subsample'] = 0.7
         params['gamma'] = 0.2
         params['num_parallel_tree'] = 2
-
     else:
         params['learning_rate'] = 0.01
         # window size = 5: max_depth=7, window size = 7: max_depth=10
@@ -474,11 +535,35 @@ def fitTheModelXGboost(X_train, X_test, y_train, y_test,X, y):
         else:
             params['max_depth'] = 5
         params['min_child_weight'] = 2
-        params['reg_alpha'] = 0.6
+        params['reg_alpha'] = 0.4
         params['reg_lambda'] = 0.7
         params['subsample'] = 0.7
-        params['gamma'] = 0.2
+        params['gamma'] = 0.5
         params['num_parallel_tree'] = 2
+        # params['n_estimators'] = 2
+
+
+        # params['learning_rate'] = 0.01
+        # # window size = 5: max_depth=7, window size = 7: max_depth=10
+        # if window_size == 3:
+        #     params['max_depth'] = 5
+        # elif window_size == 5:
+        #     params['max_depth'] = 8
+        # elif window_size == 7:
+        #     params['max_depth'] = 11
+        # elif window_size == 9:
+        #     params['max_depth'] = 11
+        # elif window_size == 11:
+        #     params['max_depth'] = 11
+        # else:
+        #     params['max_depth'] = 5
+        # params['min_child_weight'] = 2
+        # params['reg_alpha'] = 0.4
+        # params['reg_lambda'] = 0.5
+        # params['subsample'] = 0.7
+        # params['gamma'] = 0
+        # params['num_parallel_tree'] = 2
+
 
 
 
@@ -491,7 +576,7 @@ def fitTheModelXGboost(X_train, X_test, y_train, y_test,X, y):
     # Predict class labels
     # y_pred = xgb_model.predict(X_val) # validation set
     y_pred = xgb_model.predict(X_test)  # final test set
-
+    # y_pred = (y_pred_probs2 > 0.5).astype(int)
 
 
     # Evaluate the metrics to check accuracy, precision, recall, f1-score, confusion matrix and AUC
@@ -513,7 +598,7 @@ def fitTheModelXGboost(X_train, X_test, y_train, y_test,X, y):
     print('AUC: {:.2f}%'.format(auc * 100))
 
     # Cross validation
-    scores = cross_val_score(xgb_model, X, y, cv=5)
+    scores = cross_val_score(xgb_model, X, y, cv=6)
     print('The cross validation accuracies of the model are', scores)
     print('The cross validation accuracy of the model is', np.mean(scores))
 
@@ -558,6 +643,8 @@ def fitTheModelXGboost(X_train, X_test, y_train, y_test,X, y):
 
 
 
+
+
 if CalculateSeasons:
     print(f'CalculateSeasons is set to {CreateDataSet}')
     periods = [year_list[0:4], year_list[4:7], year_list[7:12], year_list[12:20]] # For Four Periods 2 Dry and 2Wet
@@ -574,10 +661,19 @@ else:
     print(f'CalculateSeasons is set to {CreateDataSet}')
     PeriodName = len(year_list)
     print(f'Calculating the period:{year_list}')
+
+    # for the normal routine
     dustsourcespickle = f'df_dustsources_WS{window_size}_X_{window_size}_PN{PeriodName}_SP_{statisticalParams}'
     df = pk.load(open(f'{dustsourcespickle}.pickle', 'rb'))
+
+    # # for Hyper parameter tuning
+    # dustsourcespickle = 'df_dustsources_WS7_X_7_PN20_SP_Var_Med_Ent_Mod.pickle'
+    # df = pk.load(open(f'{dustsourcespickle}', 'rb'))
+
+    print(f'Loading {dustsourcespickle} as dataset')
     X_train, X_test, y_train, y_test, X, y = loadDatSet(df, window_size)
     fitTheModelXGboost(X_train, X_test, y_train, y_test,X, y)
+
 
 ###################################################################
 # #### HYPERPARAMETER TUNING ######################################
@@ -585,35 +681,46 @@ else:
 
 if FindBestParam:
 
-    # RandomizedSearchCV
 
     #Define the parameter space to search over
     param_grid = {
-       'max_depth': np.arange(8, 12),
+       'max_depth': np.arange(5, 15),
        'min_child_weight': np.arange(1, 3),
-       'subsample': np.arange(0.5, 0.9, 0.1),
-       'gamma': np.arange(0, 0.6, 0.1),
+       'subsample': np.arange(0.2, 0.9, 0.1),
+       'gamma': np.arange(0, 2, 0.1),
        'reg_alpha': np.arange(0.4, 1.0, 0.1),
        'reg_lambda': np.arange(0.4, 1.0, 0.1),
        'learning_rate': np.arange(0.01, 0.2)
     }
 
+    # param_grid = {
+    #     'max_depth': np.arange(5, 15),
+    #     'min_child_weight': np.arange(1, 3),
+    #     'subsample': np.arange(0.5, 0.9, 0.1),
+    #     'gamma': np.arange(0, 0.8, 0.1),
+    #     'reg_alpha': np.arange(0.4, 1.0, 0.1),
+    #     'reg_lambda': np.arange(0.4, 1.0, 0.1),
+    #     'learning_rate': np.arange(0.01, 0.2)
+    # }
+
     # Create an instance of XGBoost classifier
     tuning_model = xgb.XGBClassifier(objective='binary:logistic', eval_metric='auc', n_jobs=-1)
-
+    #
     # gs = GridSearchCV(tuning_model, param_grid=param_grid, cv=4, n_jobs=2 )
     #
     # gs.fit(X_train,y_train)
-    #
-    # print(gs.best_params_)
+
+
 
     # Create an instance of RandomizedSearchCV
-    rs = RandomizedSearchCV(tuning_model, param_distributions=param_grid, n_iter=400000, cv=4, verbose=0, random_state=42, n_jobs=-1)
+    rs = RandomizedSearchCV(tuning_model, param_distributions=param_grid, n_iter=100800, cv=6, verbose=0, random_state=42, n_jobs=-1)
 
     # Fit the model to the data
     rs.fit(X_train, y_train)
-
+    # print('GridSearchCV Best Parameters')
+    # print(gs.best_params_)
     # Print the best hyperparameters
+    print('RandomizedSearchCV Best Parameters')
     print('Best hyperparameters:', rs.best_params_)
 
 
