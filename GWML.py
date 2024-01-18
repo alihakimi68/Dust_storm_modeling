@@ -6,6 +6,10 @@ from scipy.spatial.distance import pdist, squareform
 import xgboost as xgb
 from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
 
+from sklearn.preprocessing import MinMaxScaler
+import matplotlib.pyplot as plt
+
+
 import random
 
 Model = 'RF'
@@ -16,13 +20,24 @@ df = pd.read_csv(data_folder + "df_dustsources_WS0_X_0_PN20_SP_.csv")
 # Check and remove NA values
 df = df.dropna()
 
+# Define the columns to scale
+columns_to_scale = ["Soil_evaporation", "Lakes", "Precipitation", "Soil_moisture",
+                    "NDVI", "Elevation", "Aspect", "Curvature", "Plan_curvature",
+                    "Profile_curvature", "Distance_to_river", "Slope"]
+
+# Initialize the MinMaxScaler
+scaler = MinMaxScaler()
+
+# Fit and transform the specified columns
+df[columns_to_scale] = scaler.fit_transform(df[columns_to_scale])
+
 # Columns to convert to factors
 columns_to_convert = [2, 13] + list(range(17, 26))
 # print(df.columns)
 # df.iloc[:, columns_to_convert] = df.iloc[:, columns_to_convert].astype('category')
 
 # Drop 'Year' column
-df = df.drop(columns=['Year'])
+#df = df.drop(columns=['Year'])
 
 train_valid_df = df.copy()
 coords = train_valid_df[['Y', 'X']]
@@ -43,10 +58,16 @@ dframe_full = train_valid_df.copy()
 obs = len(dframe_full)
 params = {}
 if Model == 'RF':
-    params['n_estimators'] = 890
+    params['n_estimators'] = 676
     params['max_depth'] = 8
     params['max_features'] = 8
     params['random_state'] = 42
+    params['criterion'] = 'entropy'
+
+    # params['min_samples_leaf'] = 8
+    # params['min_samples_split'] = 3
+    # params['bootstrap'] = True
+
 
     Gl_Model = RandomForestClassifier(**params)
 else:
@@ -65,13 +86,10 @@ else:
     Gl_Model = xgb.XGBClassifier(**params)
 # params['min_samples_split'] = 2
 
-
-
 Gl_Model.fit(X_train, y_train)
 y_pred = Gl_Model.predict(X_test)
 
 print('############ Global model Metrics #############')
-
 
 accuracy = accuracy_score(y_test, y_pred)
 precision = precision_score(y_test, y_pred)
@@ -90,36 +108,38 @@ print('Confusion matrix:\n True negative: %s \
       % (conf_matrix[0, 0], conf_matrix[0, 1], conf_matrix[1, 0], conf_matrix[1, 1]))
 print('AUC: {:.2f}%'.format(auc * 100))
 
-feature_importances = Gl_Model.feature_importances_
+feature_importances = Gl_Model.feature_importances_ * 100
+
+feature_names = X_train.columns
+
+# Sort features based on their importance
+sorted_indices = np.argsort(feature_importances)[::-1]
+sorted_feature_importances = feature_importances[sorted_indices]
+sorted_feature_names = [feature_names[i] for i in sorted_indices]
+
+# Plotting
+plt.figure(figsize=(10, 6))
+plt.bar(range(len(feature_importances)), sorted_feature_importances, align="center")
+plt.xticks(range(len(feature_importances)), sorted_feature_names, rotation=45)
+plt.xlabel("Feature")
+plt.ylabel("Feature Importance (%)")
+plt.title("Feature Importance Plot")
+plt.tight_layout()
+plt.show()
+
 # Set the importance threshold
 importance_threshold = 0
 
 # Identify columns with low importance
 low_importance_columns = X_train.columns[feature_importances < importance_threshold]
-dframe = dframe_full.drop(low_importance_columns, axis=1)
+# dframe = dframe_full.drop(low_importance_columns, axis=1)
+dframe = dframe_full.drop(['Lakes', 'Cropland', 'Natural_vegetation', 'Clay_Loam','Sand_Clay_Loam'], axis=1)
 
 # Calculate pairwise distances
 distance_array = pdist(coords)
 
 # Convert the pairwise distances to a square matrix
 Dij = squareform(distance_array)
-
-# Function to calculate geodetic distance between two points
-# def calculate_geodetic_distance(point1, point2):
-#     return geodesic(point1, point2).kilometers
-
-# Calculate pairwise geodetic distances
-# geodetic_distances = []
-# for i in range(len(coords)):
-#     for j in range(i + 1, len(coords)):
-#         point1 = (coords['X'][i], coords['Y'][i])
-#         point2 = (coords['X'][j], coords['Y'][j])
-#         distance = calculate_geodetic_distance(point1, point2)
-#         geodetic_distances.append(distance)
-#
-# # Convert the pairwise geodetic distances to a square matrix
-# geodetic_distance_matrix = pd.DataFrame(squareform(geodetic_distances), index=coords.index, columns=coords.index)
-
 
 kernel = 'adaptive'
 bw = 140
@@ -139,27 +159,44 @@ Validation_OOB_df = pd.DataFrame(columns=['PointID', 'y_OOB', 'y_validation_OOB'
 results_data = []
 
 def bootstrapWeighted(X_train, y_train, case_weights):
-    # Draw samples with replacement as in-bag and mark as not OOB
-    sample_indices = np.random.choice(len(X_train), len(X_train), p=case_weights / np.sum(case_weights))
+    # Calculate the number of samples to select
+    num_samples = len(X_train)
+
+    # Calculate the number of samples to be included in the bootstrap sample (80%)
+    num_bootstrap_samples = int(0.63 * num_samples)
+
+    # Select the first 80% of indices without replacement based on case weights
+    bootstrap_indices = np.random.choice(num_samples, num_bootstrap_samples, replace=True,
+                                         p=case_weights / np.sum(case_weights))
+
+    # The remaining 20% of indices are for OOB
+    oob_indices = np.setdiff1d(np.arange(num_samples), bootstrap_indices)
 
     # Apply weights to training samples
-    X_train_weighted = X_train.iloc[sample_indices]
-    y_train_weighted = y_train.iloc[sample_indices]
+    X_train_weighted = X_train.iloc[bootstrap_indices]
+    y_train_weighted = y_train.iloc[bootstrap_indices]
 
-    # Mimicking the inbag_counts behavior using NumPy
-    _, inbag_counts = np.unique(sample_indices, return_counts=True)
+    while len(y_train_weighted.unique()) < 2 or any(y_train_weighted.value_counts() < 1):
+        # Select the first 80% of indices without replacement based on case weights
+        bootstrap_indices = np.random.choice(num_samples, num_bootstrap_samples, replace=True,
+                                             p=case_weights / np.sum(case_weights))
+        # The remaining 20% of indices are for OOB
+        oob_indices = np.setdiff1d(np.arange(num_samples), bootstrap_indices)
 
-    # Find the out-of-bag indices
-    oob_indices = np.setdiff1d(np.arange(len(X_train)), sample_indices)
+        # Apply weights to training samples
+        X_train_weighted = X_train.iloc[bootstrap_indices]
+        y_train_weighted = y_train.iloc[bootstrap_indices]
 
     # Save out-of-bag samples
     X_OOB = X_train.iloc[oob_indices]
     y_OOB = y_train.iloc[oob_indices]
 
-    return X_train_weighted, y_train_weighted, inbag_counts, X_OOB, y_OOB
 
 
-for m in range(0,50):
+    return X_train_weighted, y_train_weighted, X_OOB, y_OOB
+
+
+for m in range(0,obs):
     # Get the data
     DNeighbour = Dij[:, m]
 
@@ -179,7 +216,7 @@ for m in range(0,50):
         SubSet = DataSetSorted.iloc[:Ne, :]
 
         # Make sure there is at least one type of both labels in the subset
-        while len(SubSet['dust_storm'].unique()) < 2 or any(SubSet['dust_storm'].value_counts() < 3):
+        while len(SubSet['dust_storm'].unique()) < 2 or any(SubSet['dust_storm'].value_counts() < 6):
             SubSet = DataSetSorted.iloc[:Ne + cc, :]
             cc += 1
 
@@ -188,17 +225,58 @@ for m in range(0,50):
         SubSet = DataSetSorted[DataSetSorted['DNeighbour'] <= bw]
         Kernel_H = bw
 
-    # Use train_test_split to create indices for random sampling
-    Xl = SubSet.drop(['dust_storm'], axis=1)
-    yl = SubSet['dust_storm']
-    X_train_l, X_test_l, y_train_l, y_test_l = train_test_split(Xl, yl, test_size=0.2,
-                                                        random_state=42)
+    ######################################
+    # random_seed = 42
+    # np.random.seed(random_seed)
 
-    while len(y_train_l.unique()) < 2 or len(y_test_l.unique()) < 2 or any(y_train_l.value_counts() < 1) or any(
-            y_test_l.value_counts() < 1):
+    train_indices = np.random.choice(len(SubSet['dust_storm']), size=int(0.8 * len(SubSet['dust_storm'])), replace=False)
+
+    # train_indices = [index - 1 for index in train_indices]
+
+    SubSet_train = SubSet.iloc[train_indices]
+    train_indices_np = np.array(train_indices)
+    valid_indices = np.setdiff1d(np.arange(len(SubSet)), train_indices_np)
+
+    SubSet_valid = SubSet.iloc[valid_indices]
+
+    X_train_l = SubSet_train.drop(['dust_storm'], axis=1)
+    X_test_l = SubSet_valid.drop(['dust_storm'], axis=1)
+    y_train_l = SubSet_train['dust_storm']
+    y_test_l = SubSet_valid['dust_storm']
+
+    while len(y_train_l.unique()) < 2 or len(y_test_l.unique()) < 2 or any(y_train_l.value_counts() < 3) or any(
+            y_test_l.value_counts() < 3):
         random_integer = random.randint(15, 45)
-        X_train_l, X_test_l, y_train_l, y_test_l = train_test_split(Xl, yl, test_size=0.2,
-                                                                    random_state=random_integer)
+        train_indices = np.random.choice(len(SubSet['dust_storm']), size=int(0.8 * len(SubSet['dust_storm'])),
+                                         replace=False)
+
+        # train_indices = [index - 1 for index in train_indices]
+
+        SubSet_train = SubSet.iloc[train_indices]
+        train_indices_np = np.array(train_indices)
+        valid_indices = np.setdiff1d(np.arange(len(SubSet)), train_indices_np)
+
+        SubSet_valid = SubSet.iloc[valid_indices]
+
+        X_train_l = SubSet_train.drop(['dust_storm'], axis=1)
+        X_test_l = SubSet_valid.drop(['dust_storm'], axis=1)
+        y_train_l = SubSet_train['dust_storm']
+        y_test_l = SubSet_valid['dust_storm']
+
+    #####################################
+
+    # # Use train_test_split to create indices for random sampling
+    # Xl = SubSet.drop(['dust_storm'], axis=1)
+    # # Xl = SubSet.drop(['Lakes', 'Cropland', 'Natural_vegetation', 'Clay_Loam'], axis=1)
+    # yl = SubSet['dust_storm']
+    # X_train_l, X_test_l, y_train_l, y_test_l = train_test_split(Xl, yl, test_size=0.2,
+    #                                                     random_state=42)
+    #
+    # while len(y_train_l.unique()) < 2 or len(y_test_l.unique()) < 2 or any(y_train_l.value_counts() < 1) or any(
+    #         y_test_l.value_counts() < 1):
+    #     random_integer = random.randint(15, 45)
+    #     X_train_l, X_test_l, y_train_l, y_test_l = train_test_split(Xl, yl, test_size=0.2,
+    #                                                                 random_state=random_integer)
 
     # Bi-square weights
     Wts_train = (1 - (X_train_l['DNeighbour'] / Kernel_H) ** 2) ** 2
@@ -206,21 +284,53 @@ for m in range(0,50):
     # Wts_train = np.exp(-(X_train_l['DNeighbour']**2) / (2 * Kernel_H**2))
 
     # Use bootstrapWeighted to get weighted samples
-    X_train_l_weighted, y_train_l_weighted, inbag_counts, X_OOB, y_OOB = bootstrapWeighted(X_train_l,
-                                                                                               y_train_l, Wts_train)
+    X_train_l_weighted, y_train_l_weighted, X_OOB, y_OOB = bootstrapWeighted(X_train_l,
+                                                                             y_train_l, Wts_train)
 
     X_train_l_noPID = X_train_l_weighted.drop(['pointID'], axis=1)
+    # X_train_l_noPID = X_train_l.drop(['pointID'], axis=1)
+
     X_test_l_noPID = X_test_l.drop(['pointID'], axis=1)
     X_OOB_noPID = X_OOB.drop(['pointID'], axis=1)
 
+    # Sort X_train_l_noPID and y_train_l_weighted based on 'DNeighbour'
+    train_sort_index = X_train_l_noPID['DNeighbour'].sort_values().index
+    X_train_l_noPID = X_train_l_noPID.loc[train_sort_index]
+    y_train_l_weighted = y_train_l_weighted.loc[train_sort_index]
+
+    # Sort X_test_l_noPID and y_test_l based on 'DNeighbour'
+    test_sort_index = X_test_l_noPID['DNeighbour'].sort_values().index
+    X_test_l_noPID = X_test_l_noPID.loc[test_sort_index]
+    y_test_l = y_test_l.loc[test_sort_index]
+
+    # Sort X_OOB_noPID and y_test_l based on 'DNeighbour'
+    test_sort_index = X_OOB_noPID['DNeighbour'].sort_values().index
+    X_OOB_noPID = X_OOB_noPID.loc[test_sort_index]
+    y_OOB = y_OOB.loc[test_sort_index]
 
     # X_train_l_noPID = X_train_l_noPID.drop(['DNeighbour'], axis=1)
     # X_test_l_noPID = X_test_l_noPID.drop(['DNeighbour'], axis=1)
+    # X_OOB_noPID = X_OOB_noPID.drop(['DNeighbour'], axis=1)
 
     if Model == 'RF':
 
+        # Calculate class weights
+        num_class_0_train = sum(y_train_l_weighted == 0)
+        num_class_1_train = sum(y_train_l_weighted == 1)
+        num_class_total = num_class_0_train + num_class_1_train
+
+        weight_class_0_train = num_class_total / (2 * num_class_0_train)
+        weight_class_1_train = num_class_total / (2 * num_class_1_train)
+
+        weight_class_0_normalized = weight_class_0_train / (weight_class_0_train + weight_class_1_train)
+        weight_class_1_normalized = weight_class_1_train / (weight_class_0_train + weight_class_1_train)
+
+        # Create a dictionary of class weights
+        class_weights = {0: weight_class_0_normalized, 1: weight_class_1_normalized}
+
         params['class_weight'] = 'balanced'
         params['n_jobs'] = -1
+        params['bootstrap'] = True
         LO_Model = RandomForestClassifier(**params)
 
     else:
@@ -229,10 +339,13 @@ for m in range(0,50):
         LO_Model = xgb.XGBClassifier(**params)
 
     # FIT THE MODEL TO THE TRAINING DATA
+    # LO_Model.fit(X_train_l_noPID, y_train_l)
     LO_Model.fit(X_train_l_noPID, y_train_l_weighted)
 
     ##### TEST PREDICTION ####
-    y_pred_l = LO_Model.predict(X_test_l_noPID)
+    y_pred_l_ = LO_Model.predict(X_test_l_noPID)
+    y_pred_l = (y_pred_l_ > 0.5).astype(int)
+
     prediction_row = pd.DataFrame({'PointID': X_test_l['pointID'],
                                    'y_test_l': y_test_l,
                                    'y_pred_l': y_pred_l,
@@ -244,7 +357,9 @@ for m in range(0,50):
     prediction_df = pd.concat([prediction_df, prediction_row], ignore_index=True)
 
     ##### OUT OF BAG VALDIATION ####
-    y_validation_OOB = LO_Model.predict(X_OOB_noPID)
+    y_validation_OOB_ = LO_Model.predict(X_OOB_noPID)
+    y_validation_OOB = (y_validation_OOB_ > 0.5).astype(int)
+
     validation_OOB_row = pd.DataFrame({'PointID': X_OOB['pointID'],
                                    'y_OOB': y_OOB,
                                    'y_validation_OOB': y_validation_OOB,
@@ -289,9 +404,9 @@ fn_count = aggregated_df['MajorityClass'].value_counts().get('FalseNegative', 0)
 
 # Create a confusion matrix DataFrame
 confusion_matrix_local = pd.DataFrame({
-    'Actual_Positive': [tp_count, fn_count],
-    'Actual_Negative': [fp_count, tn_count]
-}, index=['Predicted_Positive', 'Predicted_Negative'])
+    'Predicted_Positive': [tp_count, fp_count],
+    'Predicted_Negative': [fn_count, tn_count]
+}, index=['Actual_Positive', 'Actual_Negative'])
 
 # Print or display the confusion matrix
 print('Confusion Matrix for Prediction')
@@ -347,9 +462,10 @@ fn_count_OOB = aggregated_oob_df['MajorityClass'].value_counts().get('FalseNegat
 
 # Create a confusion matrix DataFrame
 confusion_matrix_local_OOB = pd.DataFrame({
-    'Actual_Positive': [tp_count_OOB, fn_count_OOB],
-    'Actual_Negative': [fp_count_OOB, tn_count_OOB]
-}, index=['Predicted_Positive', 'Predicted_Negative'])
+    'Predicted_Positive': [tp_count_OOB, fp_count_OOB],
+    'Predicted_Negative': [fn_count_OOB, tn_count_OOB]
+}, index=['Actual_Positive', 'Actual_Negative'])
+
 
 # Print or display the confusion matrix
 print('Confusion Matrix for OOB')
