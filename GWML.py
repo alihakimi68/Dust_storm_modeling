@@ -216,7 +216,7 @@ def bootstrapWeighted(X_train, y_train, case_weights):
     return X_train_unique, y_train_unique, X_OOB, y_OOB, duplicate_weights
 
 
-for m in range(0,100):
+for m in range(0,obs):
     # Get the data
     DNeighbour = Dij[:, m]
 
@@ -325,15 +325,15 @@ for m in range(0,100):
     #                                                                 random_state=random_integer)
 
     # Bi-square weights
-    # Wts_train = (1 - (X_train_l['DNeighbour'] / Kernel_H) ** 2) ** 2
+    Wts_train = (1 - (X_train_l['DNeighbour'] / Kernel_H) ** 2) ** 2
     # Gaussian weights
-    Wts_train = np.exp(-(X_train_l['DNeighbour']**2) / (2 * Kernel_H**2))
+    # Wts_train = np.exp(-(X_train_l['DNeighbour']**2) / (2 * Kernel_H**2))
 
     # Use bootstrapWeighted to get weighted samples
     X_train_l_weighted, y_train_l_weighted, X_OOB, y_OOB , case_weights = bootstrapWeighted(X_train_l,
                                                                              y_train_l, Wts_train)
 
-    # Drop the pointID
+    # Drop pointID
     X_train_l_noPID = X_train_l_weighted.drop(['pointID'], axis=1)
     X_test_l_noPID = X_test_l.drop(['pointID'], axis=1)
     X_OOB_noPID = X_OOB.drop(['pointID'], axis=1)
@@ -354,7 +354,7 @@ for m in range(0,100):
     X_OOB_noPID = X_OOB_noPID.loc[test_sort_index]
     y_OOB = y_OOB.loc[test_sort_index]
 
-    # Drop the DNeighbour
+    # Drop DNeighbour
     # X_train_l_noPID = X_train_l_noPID.drop(['DNeighbour'], axis=1)
     # X_test_l_noPID = X_test_l_noPID.drop(['DNeighbour'], axis=1)
     # X_OOB_noPID = X_OOB_noPID.drop(['DNeighbour'], axis=1)
