@@ -58,14 +58,14 @@ dframe_full = train_valid_df.copy()
 obs = len(dframe_full)
 params = {}
 if Model == 'RF':
-    params['n_estimators'] = 1113
+    params['n_estimators'] = 696
     params['max_depth'] = 8
     params['max_features'] = 8
     params['random_state'] = 42
-    params['criterion'] = 'entropy'
+    params['criterion'] = 'gini'
 
-    # params['min_samples_leaf'] = 1
-    # params['min_samples_split'] = 2
+    params['min_samples_leaf'] = 2
+    params['min_samples_split'] = 5
     # params['bootstrap'] = True
 
 
