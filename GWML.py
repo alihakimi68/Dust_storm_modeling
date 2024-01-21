@@ -5,14 +5,16 @@ from sklearn.ensemble import RandomForestClassifier
 from scipy.spatial.distance import pdist, squareform
 import xgboost as xgb
 from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
+from sklearn.model_selection import RandomizedSearchCV
 
 from sklearn.preprocessing import MinMaxScaler
 import matplotlib.pyplot as plt
-
+from scipy.stats import randint
 
 import random
 
 Model = 'RF'
+HyperTune = False
 
 data_folder = "D:/University/DustStorming/ToAli/Geographically_weighted_random_forest/"
 df = pd.read_csv(data_folder + "df_dustsources_WS0_X_0_PN20_SP_.csv")
@@ -51,6 +53,41 @@ y = train_valid_df['dust_storm']
 X_train, X_test, y_train, y_test  = train_test_split(X, y, test_size=0.2,
                                                                   random_state=42)
 
+if HyperTune:
+    param_dist = {
+        'n_estimators': randint(600, 1500),
+        'max_features': ['sqrt', 'log2'] + list(range(6, 13)),
+        'min_samples_split': [2, 3, 4, 5, 6, 7, 8, 10],
+        'min_samples_leaf': [1, 2, 3, 4, 5, 6],
+        'criterion': ['entropy', 'gini'],
+        'bootstrap': [True, False]
+    }
+    # Create a random forest classifier
+    rf_classifier = RandomForestClassifier()
+
+    # Use RandomizedSearchCV for hyperparameter tuning
+    random_search = RandomizedSearchCV(
+        rf_classifier,
+        param_distributions=param_dist,
+        n_iter=10,  # Adjust the number of iterations as needed
+        cv=5,  # Adjust the number of cross-validation folds as needed
+        scoring='accuracy',  # Use an appropriate scoring metric
+        random_state=42,
+        n_jobs=-1  # Use all available CPU cores
+    )
+
+    # Fit the random search to the data
+    random_search.fit(X_train, y_train)
+
+    # Print the best hyperparameters
+    print("Best Hyperparameters:", random_search.best_params_)
+
+    # Get the best model from the random search
+    best_rf_model = random_search.best_estimator_
+
+    # Evaluate the best model on the test set
+    accuracy = best_rf_model.score(X_test, y_test)
+    print("Test Accuracy:", accuracy)
 # Make a copy of the dataset for the global model
 dframe_full = train_valid_df.copy()
 
@@ -65,7 +102,7 @@ if Model == 'RF':
     params['criterion'] = 'gini'
 
     params['min_samples_leaf'] = 2
-    params['min_samples_split'] = 5
+    params['min_samples_split'] = 4
     # params['bootstrap'] = True
 
 
@@ -373,7 +410,8 @@ for m in range(0,obs):
         weight_class_1_normalized = weight_class_1_train / (weight_class_0_train + weight_class_1_train)
 
         # Create a dictionary of class weights
-        class_weights = {0: weight_class_0_normalized, 1: weight_class_1_normalized}
+        # class_weights = {0: weight_class_0_normalized, 1: weight_class_1_normalized}
+        class_weights = {0: weight_class_0_train, 1: weight_class_1_train}
 
         params['class_weight'] = class_weights
         params['n_jobs'] = -1
