@@ -42,7 +42,7 @@ columns_to_convert = [2, 13] + list(range(17, 26))
 #df = df.drop(columns=['Year'])
 
 train_valid_df = df.copy()
-coords = train_valid_df[['Y', 'X']]
+coords = train_valid_df[['X', 'Y']]
 
 # Drop the specified coordinates from the train data frame
 train_valid_df = train_valid_df.drop(columns=['X', 'Y'])
@@ -193,6 +193,7 @@ prediction_df = pd.DataFrame(columns=['PointID', 'y_test_l', 'y_pred_l', 'TruePo
 Validation_OOB_df = pd.DataFrame(columns=['PointID', 'y_OOB', 'y_validation_OOB', 'TruePositive',
                                       'TrueNegative', 'FalsePositive', 'FalseNegative'])
 
+prediction_row_2nd_df = pd.DataFrame(columns=['PointID', 'y_test_l', 'y_pred_l'])
 
 results_data = []
 
@@ -375,21 +376,21 @@ for m in range(0,obs):
     X_test_l_noPID = X_test_l.drop(['pointID'], axis=1)
     X_OOB_noPID = X_OOB.drop(['pointID'], axis=1)
 
-    # Sort X_train_l_noPID and y_train_l_weighted based on 'DNeighbour'
-    train_sort_index = X_train_l_noPID['DNeighbour'].sort_values().index
-    X_train_l_noPID = X_train_l_noPID.loc[train_sort_index]
-    y_train_l_weighted = y_train_l_weighted.loc[train_sort_index]
-    case_weights = case_weights.loc[train_sort_index]
-
-    # Sort X_test_l_noPID and y_test_l based on 'DNeighbour'
-    test_sort_index = X_test_l_noPID['DNeighbour'].sort_values().index
-    X_test_l_noPID = X_test_l_noPID.loc[test_sort_index]
-    y_test_l = y_test_l.loc[test_sort_index]
-
-    # Sort X_OOB_noPID and y_test_l based on 'DNeighbour'
-    test_sort_index = X_OOB_noPID['DNeighbour'].sort_values().index
-    X_OOB_noPID = X_OOB_noPID.loc[test_sort_index]
-    y_OOB = y_OOB.loc[test_sort_index]
+    # # Sort X_train_l_noPID and y_train_l_weighted based on 'DNeighbour'
+    # train_sort_index = X_train_l_noPID['DNeighbour'].sort_values().index
+    # X_train_l_noPID = X_train_l_noPID.loc[train_sort_index]
+    # y_train_l_weighted = y_train_l_weighted.loc[train_sort_index]
+    # case_weights = case_weights.loc[train_sort_index]
+    #
+    # # Sort X_test_l_noPID and y_test_l based on 'DNeighbour'
+    # test_sort_index = X_test_l_noPID['DNeighbour'].sort_values().index
+    # X_test_l_noPID = X_test_l_noPID.loc[test_sort_index]
+    # y_test_l = y_test_l.loc[test_sort_index]
+    #
+    # # Sort X_OOB_noPID and y_test_l based on 'DNeighbour'
+    # test_sort_index = X_OOB_noPID['DNeighbour'].sort_values().index
+    # X_OOB_noPID = X_OOB_noPID.loc[test_sort_index]
+    # y_OOB = y_OOB.loc[test_sort_index]
 
     # Drop DNeighbour
     # X_train_l_noPID = X_train_l_noPID.drop(['DNeighbour'], axis=1)
@@ -424,7 +425,9 @@ for m in range(0,obs):
         LO_Model = xgb.XGBClassifier(**params)
 
     # FIT THE MODEL TO THE TRAINING DATA
-    LO_Model.fit(X_train_l_noPID, y_train_l_weighted, sample_weight = case_weights)
+    case_weights_float = case_weights.astype(float)
+
+    LO_Model.fit(X_train_l_noPID, y_train_l_weighted, sample_weight = case_weights_float)
 
     ##### TEST PREDICTION ####
     y_pred_l_ = LO_Model.predict(X_test_l_noPID)
@@ -452,6 +455,11 @@ for m in range(0,obs):
                                    'FalsePositive': 0,
                                    'FalseNegative': 0}, )
     Validation_OOB_df = pd.concat([Validation_OOB_df, validation_OOB_row], ignore_index=True)
+
+    prediction_row_2nd = pd.DataFrame({'PointID': [X_test_l['pointID'].iloc[0]],
+                                       'y_test_l': [y_test_l.iloc[0]],
+                                       'y_pred_l': [y_pred_l[0]]})
+    prediction_row_2nd_df = pd.concat([prediction_row_2nd_df, prediction_row_2nd], ignore_index=True)
 
     print(m)
 
@@ -573,7 +581,33 @@ print("OOB Precision: {:.2f}".format(precision_local_OOB*100))
 print("OOB Recall: {:.2f}".format(recall_local_OOB*100))
 print("OOB F1 Score: {:.2f}".format(f1_local_OOB*100))
 
+print('############ Local model Metrics PREDICTION 2nd method #############')
+
+actual_values_2nd = prediction_row_2nd_df['y_test_l'].astype(int)
+predicted_values_2nd = prediction_row_2nd_df['y_pred_l'].astype(int)
+
+confusion_matrix_result_2nd = confusion_matrix(actual_values_2nd, predicted_values_2nd)
+
+print('Confusion Matrixof PREDICTION for 2nd method')
+print(confusion_matrix_result_2nd)
+
+# Calculate accuracy
+accuracy_local_2nd = accuracy_score(actual_values_2nd, predicted_values_2nd)
+
+# Calculate precision
+precision_local_2nd = precision_score(actual_values_2nd, predicted_values_2nd)
+
+# Calculate recall
+recall_local_2nd = recall_score(actual_values_2nd, predicted_values_2nd)
+
+# Calculate F1 score
+f1_local_2nd = f1_score(actual_values_2nd, predicted_values_2nd)
+
+# Print the results
+print("Accuracy for the 2nd method of prediction: {:.2f}%".format(accuracy_local_2nd*100))
+print("precision for the 2nd method of prediction: {:.2f}%".format(precision_local_2nd*100))
+print("Recall for the 2nd method of prediction: {:.2f}%".format(recall_local_2nd*100))
+print("F1 Score for the 2nd method of prediction: {:.2f}%".format(f1_local_2nd*100))
+
 
 print('finish')
-
-
