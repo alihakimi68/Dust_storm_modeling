@@ -95,14 +95,20 @@ dframe_full = train_valid_df.copy()
 obs = len(dframe_full)
 params = {}
 if Model == 'RF':
-    params['n_estimators'] = 696
-    params['max_depth'] = 8
+    params['n_estimators'] = 200
+    params['max_depth'] = 5
     params['max_features'] = 8
     params['random_state'] = 42
-    params['criterion'] = 'gini'
-
-    params['min_samples_leaf'] = 2
+    params['criterion'] = 'entropy'
+    # params['ccp_alpha'] = 0.012034044024305203
+    # params['max_leaf_nodes'] = 37
+    # params['max_samples'] = 0.32352782230151134
+    # params['min_impurity_decrease'] = 0.011134562990795117
     params['min_samples_split'] = 4
+    params['min_samples_leaf'] = 2
+    # params['min_weight_fraction_leaf'] = 0.00944043928811733
+    params['n_jobs'] = -1
+
     # params['bootstrap'] = True
 
 
@@ -239,19 +245,21 @@ def bootstrapWeighted(X_train, y_train, case_weights):
     X_train_unique = X_train_weighted.drop_duplicates('pointID')
     X_train_indices = X_train_unique.index
 
-    y_train_weighted = y_train_weighted[~y_train_weighted.index.duplicated(keep='first')]
+    # y_train_weighted = y_train_weighted[~y_train_weighted.index.duplicated(keep='first')]
 
     # Reindex y_train_weighted
-    y_train_unique = y_train_weighted.reindex(X_train_indices)
+    # y_train_unique = y_train_weighted.reindex(X_train_indices)
 
     # case_weights = case_weights.loc[X_train_indices]
 
     # Create a weight list based on the number of duplicates
     duplicate_weights = X_train_unique['pointID'].map(duplicate_counts)
+    duplicate_weights = X_train_weighted['pointID'].map(duplicate_counts)
 
     # Sample_eights = case_weights * duplicate_weights
 
-    return X_train_unique, y_train_unique, X_OOB, y_OOB, duplicate_weights
+    # return X_train_unique, y_train_unique, X_OOB, y_OOB, duplicate_weights
+    return X_train_weighted, y_train_weighted, X_OOB, y_OOB, duplicate_weights
 
 
 for m in range(0,obs):
@@ -404,8 +412,8 @@ for m in range(0,obs):
         num_class_1_train = sum(y_train_l_weighted == 1)
         num_class_total = num_class_0_train + num_class_1_train
 
-        weight_class_0_train = num_class_total / (2 * num_class_0_train)
-        weight_class_1_train = num_class_total / (2 * num_class_1_train)
+        weight_class_0_train = (num_class_total / (2 * num_class_0_train)) * 100
+        weight_class_1_train = (num_class_total / (2 * num_class_1_train)) * 100
 
         weight_class_0_normalized = weight_class_0_train / (weight_class_0_train + weight_class_1_train)
         weight_class_1_normalized = weight_class_1_train / (weight_class_0_train + weight_class_1_train)
@@ -415,7 +423,6 @@ for m in range(0,obs):
         class_weights = {0: weight_class_0_train, 1: weight_class_1_train}
 
         params['class_weight'] = class_weights
-        params['n_jobs'] = -1
         # params['bootstrap'] = True
         LO_Model = RandomForestClassifier(**params)
 
@@ -430,8 +437,8 @@ for m in range(0,obs):
     LO_Model.fit(X_train_l_noPID, y_train_l_weighted, sample_weight = case_weights_float)
 
     ##### TEST PREDICTION ####
-    y_pred_l_ = LO_Model.predict(X_test_l_noPID)
-    y_pred_l = (y_pred_l_ > 0.5).astype(int)
+    y_pred_l = LO_Model.predict(X_test_l_noPID)
+
 
     prediction_row = pd.DataFrame({'PointID': X_test_l['pointID'],
                                    'y_test_l': y_test_l,
@@ -444,8 +451,8 @@ for m in range(0,obs):
     prediction_df = pd.concat([prediction_df, prediction_row], ignore_index=True)
 
     ##### OUT OF BAG VALDIATION ####
-    y_validation_OOB_ = LO_Model.predict(X_OOB_noPID)
-    y_validation_OOB = (y_validation_OOB_ > 0.5).astype(int)
+    y_validation_OOB = LO_Model.predict(X_OOB_noPID)
+
 
     validation_OOB_row = pd.DataFrame({'PointID': X_OOB['pointID'],
                                    'y_OOB': y_OOB,
