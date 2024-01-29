@@ -96,7 +96,7 @@ obs = len(dframe_full)
 params = {}
 if Model == 'RF':
     params['n_estimators'] = 200
-    params['max_depth'] = 5
+    params['max_depth'] = 8
     params['max_features'] = 8
     params['random_state'] = 42
     params['criterion'] = 'entropy'
