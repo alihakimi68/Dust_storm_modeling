@@ -13,7 +13,7 @@ from scipy.stats import randint
 
 import random
 
-Model = 'RF'
+Model = 'XGB'
 HyperTune = False
 
 data_folder = "D:/University/DustStorming/ToAli/Geographically_weighted_random_forest/"
@@ -99,12 +99,12 @@ if Model == 'RF':
     params['max_depth'] = 8
     params['max_features'] = 8
     params['random_state'] = 42
-    params['criterion'] = 'entropy'
-    # params['ccp_alpha'] = 0.012034044024305203
-    # params['max_leaf_nodes'] = 37
-    # params['max_samples'] = 0.32352782230151134
-    # params['min_impurity_decrease'] = 0.011134562990795117
-    params['min_samples_split'] = 4
+    params['criterion'] = 'gini'
+    params['ccp_alpha'] = 0.012034044024305203
+    # params['max_leaf_nodes'] = 20
+    params['max_samples'] = 0.32352782230151134
+    params['min_impurity_decrease'] = 0.011134562990795117
+    params['min_samples_split'] = 8
     params['min_samples_leaf'] = 2
     # params['min_weight_fraction_leaf'] = 0.00944043928811733
     params['n_jobs'] = -1
@@ -149,6 +149,28 @@ print('Confusion matrix:\n True negative: %s \
           \n False positive: %s \n False negative: %s \n True positive: %s'
       % (conf_matrix[0, 0], conf_matrix[0, 1], conf_matrix[1, 0], conf_matrix[1, 1]))
 print('AUC: {:.2f}%'.format(auc * 100))
+
+y_all_predict = Gl_Model.predict(X)
+
+print('############ Global model Metrics for all Observations #############')
+
+accuracy_all = accuracy_score(y, y_all_predict)
+precision_all = precision_score(y, y_all_predict)
+recall_all = recall_score(y, y_all_predict)
+f1_all = f1_score(y, y_all_predict)
+conf_matrix_all = confusion_matrix(y, y_all_predict)
+auc_all = roc_auc_score(y, y_all_predict)
+
+# Print the metrics
+print("Accuracy: {:.2f}%".format(accuracy_all * 100))
+print("Precision: {:.2f}%".format(precision_all * 100))
+print("Recall: {:.2f}%".format(recall_all * 100))
+print("F1-score: {:.2f}%".format(f1_all * 100))
+print('Confusion matrix:\n True negative: %s \
+          \n False positive: %s \n False negative: %s \n True positive: %s'
+      % (conf_matrix_all[0, 0], conf_matrix_all[0, 1], conf_matrix_all[1, 0], conf_matrix_all[1, 1]))
+print('AUC: {:.2f}%'.format(auc_all * 100))
+
 
 # Global Model Feature Importance
 feature_importances = Gl_Model.feature_importances_ * 100
@@ -208,7 +230,7 @@ def bootstrapWeighted(X_train, y_train, case_weights):
     num_samples = len(X_train)
 
     # Calculate the number of samples to be included in the bootstrap sample (80%)
-    num_bootstrap_samples = int(0.63 * num_samples)
+    num_bootstrap_samples = int(0.7 * num_samples)
 
     # Select the first 80% of indices without replacement based on case weights
     bootstrap_indices = np.random.choice(num_samples, num_bootstrap_samples, replace=True,
