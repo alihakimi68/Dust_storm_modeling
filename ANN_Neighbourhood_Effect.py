@@ -33,18 +33,18 @@ from rasterio.windows import Window
 import geopandas as gpd
 import pandas as pd
 import tensorflow as tf
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense, Dropout
 import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split, GridSearchCV, cross_val_score, RandomizedSearchCV
 from sklearn.feature_selection import mutual_info_classif, RFE
+from keras.utils import to_categorical
 from sklearn.preprocessing import MinMaxScaler
 import numpy as np
-from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
+from sklearn.metrics import (confusion_matrix, accuracy_score, precision_score,
+                             recall_score, f1_score, roc_auc_score,make_scorer)
+from scikeras.wrappers import KerasClassifier
 import math as m
 import pickle as pk
 from scipy.spatial.distance import cdist
-
 
 ###################################################################
 # #### Data Path ##################################################
@@ -446,9 +446,20 @@ def loadDatSet(df,window_size):
     print(f'windows size: {window_size}')
 
     # drop original categorical columns
-    df = df.drop(columns=['X', 'Y', 'landcover', 'soil_type'])
+    df = df.drop(columns=['X', 'Y','Year', 'landcover', 'soil_type'])
 
     df.to_csv(f'{dustsourcespickle}.csv', index=False)
+
+    columns_to_scale = ["Soil_evaporation", "Lakes", "Precipitation", "Soil_moisture",
+                        "NDVI", "Elevation", "Aspect", "Curvature", "Plan_curvature",
+                        "Profile_curvature", "Distance_to_river", "Slope"]
+
+    # Initialize the MinMaxScaler
+    scaler = MinMaxScaler()
+
+    # Fit and transform the specified columns
+    # df[columns_to_scale] = scaler.fit_transform(df[columns_to_scale])
+    df[df.columns] = scaler.fit_transform(df[df.columns])
 
     X = df.drop(['dust_storm'], axis=1)
     # X = df.drop(['dust_storm','Lakes entropy','Loam Sand','Sand Clay Loam','Clay Loam',
@@ -456,12 +467,16 @@ def loadDatSet(df,window_size):
 
     y = df['dust_storm']
     value_counts = y.value_counts()
+    # y = to_categorical(y, num_classes=2)
 
     print(f'number of dust sources {value_counts.get(1, 0)}')
     print(f'number of none dust sources {value_counts.get(0, 0)}')
     df.to_csv(f'{dustsourcespickle}.csv', index=False)
-    # Split data to 70% training, 20% testing
+    # Split data to 80% training, 20% testing
+
+
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=15)
+
     return X_train, X_test, y_train, y_test, X, y
 
 def fit_the_model_ann(X_train, X_test, y_train, y_test, X, y):
@@ -471,25 +486,26 @@ def fit_the_model_ann(X_train, X_test, y_train, y_test, X, y):
     # Create the ANN model
     input_dim = X_train.shape[1]
 
-    ann_model = Sequential()
-    ann_model.add(Dense(units=128, activation='relu', input_dim=input_dim))
-    ann_model.add(Dropout(0.5))
-    ann_model.add(Dense(units=64, activation='relu'))
-    ann_model.add(Dropout(0.5))
-    ann_model.add(Dense(units=1, activation='sigmoid'))
-    ann_model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+    ann_model = tf.keras.Sequential()
+    ann_model.add(tf.keras.layers.Dense(units=128, activation='relu', input_dim=input_dim))
+    ann_model.add(tf.keras.layers.Dropout(0.5))
+    ann_model.add(tf.keras.layers.Dense(units=64, activation='relu'))
+    ann_model.add(tf.keras.layers.Dropout(0.5))
+    ann_model.add(tf.keras.layers.Dense(units=1, activation='sigmoid'))
+    ann_model.compile(optimizer=tf.keras.optimizers.Adam(), loss=tf.keras.losses.BinaryCrossentropy(), metrics=['accuracy'])
 
     # Fit the ANN model to the training data
-    ann_model.fit(X_train, y_train, epochs=10, batch_size=32, validation_data=(X_test, y_test))
+    history = ann_model.fit(X_train, y_train, epochs=50, batch_size=32, validation_data=(X_test, y_test))
 
     # Evaluate the ANN model on the test set
     loss, accuracy = ann_model.evaluate(X_test, y_test)
     print(f'ANN Model - Test Loss: {loss:.4f}, Test Accuracy: {accuracy * 100:.2f}%')
 
     # Save the ANN model
-    ann_model.save('ann_model.h5')
+    ann_model.save('ann_model.keras')
 
-    y_pred = ann_model.predict_classes(X_test)
+    y_pred_probs = ann_model.predict(X_test)
+    y_pred = (y_pred_probs > 0.5).astype(int)
 
     # Evaluate the metrics to check accuracy, precision, recall, f1-score, confusion matrix and AUC
     accuracy = accuracy_score(y_test, y_pred)
@@ -510,15 +526,21 @@ def fit_the_model_ann(X_train, X_test, y_train, y_test, X, y):
     print('AUC: {:.2f}%'.format(auc * 100))
 
     # Cross validation
-    scores = cross_val_score(ann_model, X, y, cv=6)
-    print('The cross validation accuracies of the model are', scores)
-    print('The cross validation accuracy of the model is', np.mean(scores))
+    # # Wrap the Keras model in a scikit-learn compatible wrapper
+    # ann_model_wrapper = KerasClassifier(build_fn=ann_model, epochs=10, batch_size=32,
+    #                                     validation_data=(X_test, y_test))
+    #
+    # # Specify the scoring metric you want to use
+    # scoring = {'accuracy': make_scorer(accuracy_score)}
+    # scores = cross_val_score(ann_model_wrapper, X, y, cv=6, scoring=scoring['accuracy'])
+    # print('The cross validation accuracies of the model are', scores)
+    # print('The cross validation accuracy of the model is', np.mean(scores))
 
     # Save the current standard output
     original_stdout = sys.stdout
 
     # Specify the file path where you want to save the results
-    file_path = f'{dustsourcespickle}_Results.txt'
+    file_path = f'{dustsourcespickle}_Results_ANN.txt'
 
     # Open the file in write mode
     with open(file_path, 'w') as file:
@@ -537,9 +559,9 @@ def fit_the_model_ann(X_train, X_test, y_train, y_test, X, y):
         ))
 
         # Cross validation
-        scores = cross_val_score(ann_model, X, y, cv=5)
-        print('\nThe cross validation accuracies of the model are', scores)
-        print('The cross validation accuracy of the model is', np.mean(scores))
+        # scores = cross_val_score(ann_model, X, y, cv=5)
+        # print('\nThe cross validation accuracies of the model are', scores)
+        # print('The cross validation accuracy of the model is', np.mean(scores))
         print('\nThe windows size is', window_size)
         print('\nThe results are for the years:', year_list)
     # Reset the standard output to the original
@@ -548,21 +570,32 @@ def fit_the_model_ann(X_train, X_test, y_train, y_test, X, y):
     # Print a message indicating that the results have been saved
     print(f'Results have been saved to {file_path}')
 
-    feature_importances = ann_model.feature_importances_ * 100
-    feature_names = X_train.columns
-    # Sort features based on their importance
-    sorted_indices = np.argsort(feature_importances)[::-1]
-    sorted_feature_importances = feature_importances[sorted_indices]
-    sorted_feature_names = [feature_names[i] for i in sorted_indices]
+    train_loss = history.history['loss']
+    val_loss = history.history['val_loss']
+    val_acc = history.history['val_accuracy']
+    train_acc = history.history['accuracy']
 
     # Plotting
-    plt.figure(figsize=(10, 6))
-    plt.bar(range(len(feature_importances)), sorted_feature_importances, align="center")
-    plt.xticks(range(len(feature_importances)), sorted_feature_names, rotation=45)
-    plt.xlabel("Feature")
-    plt.ylabel("Feature Importance (%)")
-    plt.title("Feature Importance Plot")
+    # Plot the training and validation loss
+    plt.figure(figsize=(12, 4))
+    plt.subplot(1, 2, 1)
+    plt.plot(train_loss, label='Training Loss')
+    plt.plot(val_loss, label='Validation Loss')
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.title('Training and Validation Loss')
+    plt.legend()
+    plt.subplot(1, 2, 2)
+    plt.plot(train_acc, label='Training Accuracy')
+    plt.plot(val_acc, label='Validation Accuracy')
+    plt.xlabel('Epoch')
+    plt.ylabel('Accuracy')
+    plt.title('Training and Validation Accuracy')
+    plt.legend()
+    # Show the plots
     plt.tight_layout()
+    plt.savefig(f'{dustsourcespickle}_Results_ANN.png', bbox_inches='tight')
+
     plt.show()
 
 if CalculateSeasons:
