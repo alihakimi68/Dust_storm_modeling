@@ -13,7 +13,7 @@ library(h2o)
 
 
 # Set the working directory to the package folder
-setwd("D:/University/DustStorming/ToAli/Geographically_weighted_random_forest/package")
+setwd("D:/University/DustStorming/ToAli/DustStormModeling/R/package")
 
 # Source each file
 source("grf.R")
@@ -22,7 +22,7 @@ source("predict.grf.R")
 source("random.test.data.R")
 source("rf.mtry.optim.R")
 
-dataFolder<-"D:\\University\\DustStorming\\ToAli\\Geographically_weighted_random_forest\\"
+dataFolder<-"D:\\University\\DustStorming\\ToAli\\DustStormModeling\\R\\"
 # df<-read.csv(paste0(dataFolder,"df_dustsources_WS0_X_0_PN20_SP_.csv"), header=T)
 df<-read.csv(paste0(dataFolder,"df_dustsources_WS0_X_0_PN20_SP_.csv"), header=T)
 
