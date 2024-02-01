@@ -471,11 +471,6 @@ def fitTheModelXGboost(X_train, X_test, y_train, y_test,X, y):
     params['eval_metric'] = 'auc'
 
     if dustsourcespickle == 'df_dustsources_WS5_X_5_PN3_SP_Mea_WMe_Var_Cov_Med_Ent_Mod.pickle':
-        # Hyper tuning for df_dustsources_WS5_X_5_PN3_SP_Mea_WMe_Var_Cov_Med_Ent_Mod.pickle
-        # GridSearchCV Best Parameters
-        # {'gamma': 0.1, 'learning_rate': 0.01, 'max_depth': 7, 'min_child_weight': 2, 'reg_alpha': 0.8999999999999999, 'reg_lambda': 0.7999999999999999, 'subsample': 0.6}
-        # RandomizedSearchCV Best Parameters
-        # Best hyperparameters: {'subsample': 0.6, 'reg_lambda': 0.7999999999999999, 'reg_alpha': 0.8999999999999999, 'min_child_weight': 2, 'max_depth': 7, 'learning_rate': 0.01, 'gamma': 0.1}
         params['learning_rate'] = 0.01
         params['max_depth'] = 7
         params['min_child_weight'] = 2
@@ -606,7 +601,7 @@ def fitTheModelXGboost(X_train, X_test, y_train, y_test,X, y):
     original_stdout = sys.stdout
 
     # Specify the file path where you want to save the results
-    file_path = f'{dustsourcespickle}_Results.txt'
+    file_path = f'{dustsourcespickle}_Results_XGBoost.txt'
 
     # Open the file in write mode
     with open(file_path, 'w') as file:
@@ -636,9 +631,23 @@ def fitTheModelXGboost(X_train, X_test, y_train, y_test,X, y):
     # Print a message indicating that the results have been saved
     print(f'Results have been saved to {file_path}')
 
-    fig, ax = plt.subplots(figsize=(20, 16))  # Set the figure size (adjust the values as needed)
-    xgb.plot_importance(xgb_model, ax=ax)
-    plt.savefig(f'{dustsourcespickle}_Results.png', bbox_inches='tight')  # Save the plot as an image file
+    feature_importances = xgb_model.feature_importances_ * 100
+    feature_names = X_train.columns
+    # Sort features based on their importance
+    sorted_indices = np.argsort(feature_importances)[::-1]
+    sorted_feature_importances = feature_importances[sorted_indices]
+    sorted_feature_names = [feature_names[i] for i in sorted_indices]
+
+    # Plotting
+    plt.figure(figsize=(15, 8))  # Adjust the figure size
+    plt.bar(range(len(feature_importances)), sorted_feature_importances, align="center")
+    plt.xticks(range(len(feature_importances)), sorted_feature_names, rotation=45,
+               ha="right")  # Rotate labels and align to the right
+    plt.xlabel("Feature")
+    plt.ylabel("Feature Importance (%)")
+    plt.title("Feature Importance Plot")
+    plt.tight_layout()
+    plt.savefig(f'{dustsourcespickle}_Results_RF.png', bbox_inches='tight')
     plt.show()
 
 
