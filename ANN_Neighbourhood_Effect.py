@@ -32,7 +32,9 @@ import rasterio
 from rasterio.windows import Window
 import geopandas as gpd
 import pandas as pd
-from sklearn.ensemble import RandomForestClassifier
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Dropout
 import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split, GridSearchCV, cross_val_score, RandomizedSearchCV
 from sklearn.feature_selection import mutual_info_classif, RFE
@@ -67,13 +69,13 @@ CalculateSeasons = False  # divide data in to 4 periods :
 # Predict_Year = 2020 # for the predicting the whole dataset set Predict_Year = year_list
 
 numerical = {'Mean': False,
-             'WMean': False,
-             'Variance': True,
+             'WMean': True,
+             'Variance': False,
              'Covariance': False,
-             'Median': True}
+             'Median': False}
 
-categorical = {'Entropy': True,
-               'Mode': True}
+categorical = {'Entropy': False,
+               'Mode': False}
 
 EmptyDf = pd.DataFrame(columns=['Soil_evaporation', 'Lakes', 'landcover', 'Precipitation', 'Soil_moisture',
                                 'NDVI', 'Elevation', 'soil_type', 'Aspect', 'Curvature', 'Plan_curvature',
@@ -444,7 +446,7 @@ def loadDatSet(df,window_size):
     print(f'windows size: {window_size}')
 
     # drop original categorical columns
-    df = df.drop(columns=['X', 'Y','Year', 'landcover', 'soil_type'])
+    df = df.drop(columns=['X', 'Y', 'landcover', 'soil_type'])
 
     df.to_csv(f'{dustsourcespickle}.csv', index=False)
 
@@ -458,64 +460,36 @@ def loadDatSet(df,window_size):
     print(f'number of dust sources {value_counts.get(1, 0)}')
     print(f'number of none dust sources {value_counts.get(0, 0)}')
     df.to_csv(f'{dustsourcespickle}.csv', index=False)
-    # Split data to 80% training, 20% testing
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    # Split data to 70% training, 20% testing
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=15)
     return X_train, X_test, y_train, y_test, X, y
 
-def fitTheModelRF(X_train, X_test, y_train, y_test,X, y):
+def fit_the_model_ann(X_train, X_test, y_train, y_test, X, y):
     ###################################################################
     # #### Fit the model and result ###################################
     ###################################################################
-    # Set hyperparameters
+    # Create the ANN model
+    input_dim = X_train.shape[1]
 
-    # For Mean Weight
-    # params = {}
-    # params['n_estimators'] = 984
-    # params['max_depth'] = 11
-    # params['max_features'] = 10
-    # params['criterion'] = 'entropy'
-    # # params['ccp_alpha'] = 0.04705446849512227
-    # params['max_leaf_nodes'] = 36
-    # params['max_samples'] = 0.6097231716035652
-    # # params['min_impurity_decrease'] = 0.011942180975278128
-    # params['min_samples_split'] = 4
-    # params['min_samples_leaf'] = 6
-    # # params['min_weight_fraction_leaf'] = 0.035973179619720186
-    # params['n_jobs'] = -1
-    # # params['bootstrap'] = True
+    ann_model = Sequential()
+    ann_model.add(Dense(units=128, activation='relu', input_dim=input_dim))
+    ann_model.add(Dropout(0.5))
+    ann_model.add(Dense(units=64, activation='relu'))
+    ann_model.add(Dropout(0.5))
+    ann_model.add(Dense(units=1, activation='sigmoid'))
+    ann_model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
 
-    # For Var, Med, entropy, mode
-    params = {}
-    params['n_estimators'] = 776
-    params['max_depth'] = 10
-    params['max_features'] = 9
-    params['criterion'] = 'gini'
-    # params['ccp_alpha'] = 0.04705446849512227
-    params['max_leaf_nodes'] = 91
-    params['max_samples'] = 0.9918721448107347
-    # params['min_impurity_decrease'] = 0.011942180975278128
-    params['min_samples_split'] = 4
-    params['min_samples_leaf'] = 5
-    # params['min_weight_fraction_leaf'] = 0.035973179619720186
-    params['n_jobs'] = -1
-    # params['bootstrap'] = True
+    # Fit the ANN model to the training data
+    ann_model.fit(X_train, y_train, epochs=10, batch_size=32, validation_data=(X_test, y_test))
 
+    # Evaluate the ANN model on the test set
+    loss, accuracy = ann_model.evaluate(X_test, y_test)
+    print(f'ANN Model - Test Loss: {loss:.4f}, Test Accuracy: {accuracy * 100:.2f}%')
 
+    # Save the ANN model
+    ann_model.save('ann_model.h5')
 
-
-
-
-
-    # Create an XGBoost classifier with the hyperparameters dictionary
-    RF_model = RandomForestClassifier(**params)
-
-    # Fit the XGBoost model to the training data
-    RF_model.fit(X_train, y_train)
-
-    print('########### Predict metrics result for test obs ##########')
-    # Predict class labels
-    y_pred = RF_model.predict(X_test)  # final test set
-
+    y_pred = ann_model.predict_classes(X_test)
 
     # Evaluate the metrics to check accuracy, precision, recall, f1-score, confusion matrix and AUC
     accuracy = accuracy_score(y_test, y_pred)
@@ -536,7 +510,7 @@ def fitTheModelRF(X_train, X_test, y_train, y_test,X, y):
     print('AUC: {:.2f}%'.format(auc * 100))
 
     # Cross validation
-    scores = cross_val_score(RF_model, X, y, cv=6)
+    scores = cross_val_score(ann_model, X, y, cv=6)
     print('The cross validation accuracies of the model are', scores)
     print('The cross validation accuracy of the model is', np.mean(scores))
 
@@ -563,7 +537,7 @@ def fitTheModelRF(X_train, X_test, y_train, y_test,X, y):
         ))
 
         # Cross validation
-        scores = cross_val_score(RF_model, X, y, cv=5)
+        scores = cross_val_score(ann_model, X, y, cv=5)
         print('\nThe cross validation accuracies of the model are', scores)
         print('The cross validation accuracy of the model is', np.mean(scores))
         print('\nThe windows size is', window_size)
@@ -574,7 +548,7 @@ def fitTheModelRF(X_train, X_test, y_train, y_test,X, y):
     # Print a message indicating that the results have been saved
     print(f'Results have been saved to {file_path}')
 
-    feature_importances = RF_model.feature_importances_ * 100
+    feature_importances = ann_model.feature_importances_ * 100
     feature_names = X_train.columns
     # Sort features based on their importance
     sorted_indices = np.argsort(feature_importances)[::-1]
@@ -591,28 +565,6 @@ def fitTheModelRF(X_train, X_test, y_train, y_test,X, y):
     plt.tight_layout()
     plt.show()
 
-    print('########### Predict metrics result for test obs ##########')
-    # Predict class labels
-    y_pred_all = RF_model.predict(X)  # final test set
-
-    # Evaluate the metrics to check accuracy, precision, recall, f1-score, confusion matrix and AUC
-    accuracy_all = accuracy_score(y, y_pred_all)
-    precision_all = precision_score(y, y_pred_all)
-    recall_all = recall_score(y, y_pred_all)
-    f1_all = f1_score(y, y_pred_all)
-    conf_matrix_all = confusion_matrix(y, y_pred_all)
-    auc_all = roc_auc_score(y, y_pred_all)
-
-    # Print the metrics
-    print("Accuracy: {:.2f}%".format(accuracy_all * 100))
-    print("Precision: {:.2f}%".format(precision_all * 100))
-    print("Recall: {:.2f}%".format(recall_all * 100))
-    print("F1-score: {:.2f}%".format(f1_all * 100))
-    print('Confusion matrix:\n True negative: %s \
-                  \n False positive: %s \n False negative: %s \n True positive: %s'
-          % (conf_matrix_all[0, 0], conf_matrix_all[0, 1], conf_matrix_all[1, 0], conf_matrix_all[1, 1]))
-    print('AUC: {:.2f}%'.format(auc_all * 100))
-
 if CalculateSeasons:
     print(f'CalculateSeasons is set to {CreateDataSet}')
     periods = [year_list[0:4], year_list[4:7], year_list[7:12], year_list[12:20]] # For Four Periods 2 Dry and 2Wet
@@ -624,7 +576,7 @@ if CalculateSeasons:
         dustsourcespickle = f'df_dustsources_WS{window_size}_X_{window_size}_PN{PeriodName}_SP_{statisticalParams}'
         df = pk.load(open(f'{dustsourcespickle}.pickle', 'rb'))
         X_train, X_test, y_train, y_test, X, y = loadDatSet(df,window_size)
-        fitTheModelRF(X_train, X_test, y_train, y_test,X, y)
+        fit_the_model_ann(X_train, X_test, y_train, y_test, X, y)
 else:
     print(f'CalculateSeasons is set to {CreateDataSet}')
     PeriodName = len(year_list)
@@ -640,7 +592,7 @@ else:
 
     print(f'Loading {dustsourcespickle} as dataset')
     X_train, X_test, y_train, y_test, X, y = loadDatSet(df, window_size)
-    fitTheModelRF(X_train, X_test, y_train, y_test,X, y)
+    fit_the_model_ann(X_train, X_test, y_train, y_test, X, y)
 
 
 ###################################################################
