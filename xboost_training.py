@@ -68,12 +68,12 @@ CalculateSeasons = False  # divide data in to 4 periods :
 
 numerical = {'Mean': False,
              'WMean': False,
-             'Variance': False,
+             'Variance': True,
              'Covariance': False,
-             'Median': False}
+             'Median': True}
 
-categorical = {'Entropy': False,
-               'Mode': False}
+categorical = {'Entropy': True,
+               'Mode': True}
 
 EmptyDf = pd.DataFrame(columns=['Soil_evaporation', 'Lakes', 'landcover', 'Precipitation', 'Soil_moisture',
                                 'NDVI', 'Elevation', 'soil_type', 'Aspect', 'Curvature', 'Plan_curvature',
@@ -82,7 +82,7 @@ EmptyDf = pd.DataFrame(columns=['Soil_evaporation', 'Lakes', 'landcover', 'Preci
 
 
 Datatype = {'Soil_evaporation': 'numerical', 'Lakes': 'categorical', 'landcover': 'categorical',
-            'Precipitation': 'numerical', 'Soil moisture': 'numerical', 'NDVI': 'numerical',
+            'Precipitation': 'numerical', 'Soil_moisture': 'numerical', 'NDVI': 'numerical',
             'Elevation': 'numerical', 'soil_type': 'categorical', 'Aspect': 'numerical',
             'Curvature': 'numerical', 'Plan_curvature': 'numerical', 'Profile_curvature': 'numerical',
             'Distance_to_river': 'numerical', 'Slope': 'numerical', 'dust_storm': 'Label',
@@ -381,9 +381,6 @@ def createDatasetFunc(year_list,window_size,dustsourcespickle):
     # concatenate dummy variables to original dataframe
     df = pd.concat([df, dummy_df], axis=1)
 
-    # drop original categorical columns
-    df = df.drop(columns=['X','Y','Year','landcover', 'soil_type'])
-
     # drop not important columns
     df = df.drop(
         columns=['Water', 'Clay', 'Silt', 'Silt_Loam', 'Silt_Clay', 'Sand_Clay', 'Silt_Clay_Loam', 'Urban'])
@@ -446,6 +443,9 @@ if CreateDataSet:
 def loadDatSet(df,window_size):
     print(f'windows size: {window_size}')
 
+    # drop original categorical columns
+    df = df.drop(columns=['X', 'Y','Year', 'landcover', 'soil_type'])
+
     X = df.drop(['dust_storm'], axis=1)
     # X = df.drop(['dust_storm','Lakes entropy','Loam Sand','Sand Clay Loam','Clay Loam',
     #              'Bare Soil','Cropland','Natural vegetation','Lakes mode','Precipitation median'], axis=1)
@@ -457,7 +457,7 @@ def loadDatSet(df,window_size):
     print(f'number of none dust sources {value_counts.get(0, 0)}')
     df.to_csv(f'{dustsourcespickle}.csv', index=False)
     # Split data to 70% training, 20% testing
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=15)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
     return X_train, X_test, y_train, y_test, X, y
 
 def fitTheModelXGboost(X_train, X_test, y_train, y_test,X, y):
