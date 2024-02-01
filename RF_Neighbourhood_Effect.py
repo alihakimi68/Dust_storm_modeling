@@ -55,7 +55,7 @@ os.chdir("D:/University/DustStorming/ToAli/DustStormModeling/For training/")
 ###################################################################
 
 CreateDataSet = False  # True for creating a dataset from For training folder
-window_size = 7  # 0,3,5,7,9, ... for picking window size to search neighbor pixels of dust source
+window_size = 0  # 0,3,5,7,9, ... for picking window size to search neighbor pixels of dust source
 FindBestParam = False  # True for finding the best hyperparameters
 year_list = list(range(2001, 2021))  # temporal duration to study 2021 is not included
 CalculateSeasons = False  # divide data in to 4 periods :
@@ -68,12 +68,12 @@ CalculateSeasons = False  # divide data in to 4 periods :
 
 numerical = {'Mean': False,
              'WMean': False,
-             'Variance': True,
+             'Variance': False,
              'Covariance': False,
-             'Median': True}
+             'Median': False}
 
-categorical = {'Entropy': True,
-               'Mode': True}
+categorical = {'Entropy': False,
+               'Mode': False}
 
 EmptyDf = pd.DataFrame(columns=['Soil_evaporation', 'Lakes', 'landcover', 'Precipitation', 'Soil_moisture',
                                 'NDVI', 'Elevation', 'soil_type', 'Aspect', 'Curvature', 'Plan_curvature',
@@ -469,42 +469,54 @@ def fitTheModelRF(X_train, X_test, y_train, y_test,X, y):
     # Set hyperparameters
 
     # For Mean Weight
-    # params = {}
-    # params['n_estimators'] = 984
-    # params['max_depth'] = 11
-    # params['max_features'] = 10
-    # params['criterion'] = 'entropy'
-    # # params['ccp_alpha'] = 0.04705446849512227
-    # params['max_leaf_nodes'] = 36
-    # params['max_samples'] = 0.6097231716035652
-    # # params['min_impurity_decrease'] = 0.011942180975278128
-    # params['min_samples_split'] = 4
-    # params['min_samples_leaf'] = 6
-    # # params['min_weight_fraction_leaf'] = 0.035973179619720186
-    # params['n_jobs'] = -1
-    # # params['bootstrap'] = True
+    if dustsourcespickle == 'df_dustsources_WS7_X_7_PN20_SP_WMe_':
+        params = {}
+        params['n_estimators'] = 984
+        params['max_depth'] = 11
+        params['max_features'] = 10
+        params['criterion'] = 'entropy'
+        # params['ccp_alpha'] = 0.04705446849512227
+        params['max_leaf_nodes'] = 36
+        params['max_samples'] = 0.6097231716035652
+        # params['min_impurity_decrease'] = 0.011942180975278128
+        params['min_samples_split'] = 4
+        params['min_samples_leaf'] = 6
+        # params['min_weight_fraction_leaf'] = 0.035973179619720186
+        params['n_jobs'] = -1
+        # params['bootstrap'] = True
+    elif dustsourcespickle == 'df_dustsources_WS7_X_7_PN20_SP_Var_Med_Ent_Mod_':
+        # For Var, Med, entropy, mode
+        params = {}
+        params['n_estimators'] = 776
+        params['max_depth'] = 10
+        params['max_features'] = 9
+        params['criterion'] = 'gini'
+        # params['ccp_alpha'] = 0.04705446849512227
+        params['max_leaf_nodes'] = 91
+        params['max_samples'] = 0.9918721448107347
+        # params['min_impurity_decrease'] = 0.011942180975278128
+        params['min_samples_split'] = 4
+        params['min_samples_leaf'] = 5
+        # params['min_weight_fraction_leaf'] = 0.035973179619720186
+        params['n_jobs'] = -1
+        # params['bootstrap'] = True
 
-    # For Var, Med, entropy, mode
-    params = {}
-    params['n_estimators'] = 776
-    params['max_depth'] = 10
-    params['max_features'] = 9
-    params['criterion'] = 'gini'
-    # params['ccp_alpha'] = 0.04705446849512227
-    params['max_leaf_nodes'] = 91
-    params['max_samples'] = 0.9918721448107347
-    # params['min_impurity_decrease'] = 0.011942180975278128
-    params['min_samples_split'] = 4
-    params['min_samples_leaf'] = 5
-    # params['min_weight_fraction_leaf'] = 0.035973179619720186
-    params['n_jobs'] = -1
-    # params['bootstrap'] = True
-
-
-
-
-
-
+    else:
+        # For default
+        params = {}
+        params['n_estimators'] = 776
+        params['max_depth'] = 10
+        params['max_features'] = 9
+        params['criterion'] = 'gini'
+        # params['ccp_alpha'] = 0.04705446849512227
+        params['max_leaf_nodes'] = 91
+        params['max_samples'] = 0.9918721448107347
+        # params['min_impurity_decrease'] = 0.011942180975278128
+        params['min_samples_split'] = 4
+        params['min_samples_leaf'] = 5
+        # params['min_weight_fraction_leaf'] = 0.035973179619720186
+        params['n_jobs'] = -1
+        # params['bootstrap'] = True
 
     # Create an XGBoost classifier with the hyperparameters dictionary
     RF_model = RandomForestClassifier(**params)
@@ -544,7 +556,7 @@ def fitTheModelRF(X_train, X_test, y_train, y_test,X, y):
     original_stdout = sys.stdout
 
     # Specify the file path where you want to save the results
-    file_path = f'{dustsourcespickle}_Results.txt'
+    file_path = f'{dustsourcespickle}_Results_RF.txt'
 
     # Open the file in write mode
     with open(file_path, 'w') as file:
@@ -582,13 +594,15 @@ def fitTheModelRF(X_train, X_test, y_train, y_test,X, y):
     sorted_feature_names = [feature_names[i] for i in sorted_indices]
 
     # Plotting
-    plt.figure(figsize=(10, 6))
+    plt.figure(figsize=(15, 8))  # Adjust the figure size
     plt.bar(range(len(feature_importances)), sorted_feature_importances, align="center")
-    plt.xticks(range(len(feature_importances)), sorted_feature_names, rotation=45)
+    plt.xticks(range(len(feature_importances)), sorted_feature_names, rotation=45,
+               ha="right")  # Rotate labels and align to the right
     plt.xlabel("Feature")
     plt.ylabel("Feature Importance (%)")
     plt.title("Feature Importance Plot")
     plt.tight_layout()
+    plt.savefig(f'{dustsourcespickle}_Results_RF.png', bbox_inches='tight')
     plt.show()
 
     print('########### Predict metrics result for test obs ##########')
