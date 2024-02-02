@@ -46,6 +46,22 @@ import math as m
 import pickle as pk
 from scipy.spatial.distance import cdist
 
+# from tensorflow import keras
+# Importing libraries
+from keras.models import Sequential              # creates sequential model
+from keras.layers import Dense, Activation # creates layers and calls activation functions
+from keras.layers import (
+    Dense,
+    Dropout,
+    Flatten
+)
+from sklearn.preprocessing import MinMaxScaler
+from keras.utils import to_categorical
+from keras_tuner.tuners import RandomSearch
+
+from keras_tuner import HyperModel  # It helps to tune hyperparameters.
+import shutil
+
 ###################################################################
 # #### Data Path ##################################################
 ###################################################################
@@ -57,8 +73,8 @@ os.chdir("D:/University/DustStorming/ToAli/DustStormModeling/For training/")
 ###################################################################
 
 CreateDataSet = False  # True for creating a dataset from For training folder
-window_size = 7  # 0,3,5,7,9, ... for picking window size to search neighbor pixels of dust source
-FindBestParam = False  # True for finding the best hyperparameters
+window_size = 0  # 0,3,5,7,9, ... for picking window size to search neighbor pixels of dust source
+FindBestParam = True  # True for finding the best hyperparameters
 year_list = list(range(2001, 2021))  # temporal duration to study 2021 is not included
 CalculateSeasons = False  # divide data in to 4 periods :
 # First Period is Dry from 2000:2004
@@ -69,7 +85,7 @@ CalculateSeasons = False  # divide data in to 4 periods :
 # Predict_Year = 2020 # for the predicting the whole dataset set Predict_Year = year_list
 
 numerical = {'Mean': False,
-             'WMean': True,
+             'WMean': False,
              'Variance': False,
              'Covariance': False,
              'Median': False}
@@ -483,28 +499,107 @@ def fit_the_model_ann(X_train, X_test, y_train, y_test, X, y):
     ###################################################################
     # #### Fit the model and result ###################################
     ###################################################################
-    # Create the ANN model
-    input_dim = X_train.shape[1]
+    if FindBestParam:
+        folder_path = "D:/University/DustStorming/ToAli/DustStormModeling/For training/untitled_project"
+        if os.path.exists(folder_path):
+            shutil.rmtree(folder_path)
+    else:
+        pass
+    class AnnHyperModel(HyperModel):
+        def __init__(self, input_shape):
+            self.input_shape = input_shape
 
-    ann_model = tf.keras.Sequential()
-    ann_model.add(tf.keras.layers.Dense(units=128, activation='relu', input_dim=input_dim))
-    ann_model.add(tf.keras.layers.Dropout(0.5))
-    ann_model.add(tf.keras.layers.Dense(units=64, activation='relu'))
-    ann_model.add(tf.keras.layers.Dropout(0.5))
-    ann_model.add(tf.keras.layers.Dense(units=1, activation='sigmoid'))
-    ann_model.compile(optimizer=tf.keras.optimizers.Adam(), loss=tf.keras.losses.BinaryCrossentropy(), metrics=['accuracy'])
+        def build(self, hp):
+            model = tf.keras.Sequential()
 
-    # Fit the ANN model to the training data
-    history = ann_model.fit(X_train, y_train, epochs=50, batch_size=32, validation_data=(X_test, y_test))
+            model.add(
+                Dense(
+                    units=hp.Int('units1',32,256, 8, default=8),
+                    activation=hp.Choice('dense_activation1', values=['relu', 'tanh', 'elu'], default='relu'),
+                    activity_regularizer=tf.keras.regularizers.l2(0.001),
+                    input_shape=self.input_shape
+                )
+            )
 
-    # Evaluate the ANN model on the test set
-    loss, accuracy = ann_model.evaluate(X_test, y_test)
-    print(f'ANN Model - Test Loss: {loss:.4f}, Test Accuracy: {accuracy * 100:.2f}%')
+            model.add(
+                Dense(
+                    units=hp.Int('units2', 8,128, 4, default=16),
+                    activation=hp.Choice('dense_activation2', values=['relu', 'tanh', 'elu'], default='relu'),
+                    activity_regularizer=tf.keras.regularizers.l2(0.001),
+                )
+            )
 
-    # Save the ANN model
-    ann_model.save('ann_model.keras')
+            model.add(
+                Dropout(
+                    hp.Float(
+                        'dropout',
+                        min_value=0.0,
+                        max_value=0.1,
+                        default=0.005,
+                        step=0.01
+                    )
+                )
+            )
 
-    y_pred_probs = ann_model.predict(X_test)
+            model.add(Dense(1, activation="sigmoid"))
+
+            model.compile(
+                optimizer=tf.keras.optimizers.Adam(
+                    hp.Choice('learning_rate', values=[1e-1,1e-2, 1e-3, 1e-4,1e-5]),
+                    beta_1=0.9,
+                    beta_2=0.999,
+                    epsilon=1e-07
+                ),
+                loss='binary_crossentropy',  # Use binary crossentropy for binary classification
+                metrics=['accuracy']
+            )
+
+            return model
+
+    # Ceate the object from the class
+    input_shape = (X_train.shape[1],)
+    hypermodel = AnnHyperModel(input_shape)
+
+    # RandomSearch is here to do the hyperparameter search.
+    tuner_rs = RandomSearch(hypermodel,
+                            objective='val_accuracy',
+                            seed=42,
+                            max_trials=30)
+
+    # print a summary of the search space
+    # tuner_rs.search_space_summary()
+
+    # fit the model to find best model
+    tuner_rs.search(X_train, y_train, epochs=20, validation_data=(X_test, y_test), verbose=2)
+
+    # choosing best model among the models
+    best_model = tuner_rs.get_best_models(num_models=1)[0]
+
+    # # Shows layers of the model
+    # best_model.layers
+
+    # # Shows weights of the model (w,b)
+    # best_model.weights
+
+    # used to see the content of the model. It gives a summary of the model.
+    # here is the total number of parameters entering the nodes in each layer, which is called params.
+    # There is 784 inputs in the first layer,that is, 784 w and 2 b and since there are 2 nodes, the total parameter entered into the nodes = 2 * 784 +2 = 1570
+    best_model.summary()
+
+    # model fitting
+    # batch_size_step = X_train/batch_size
+    history = best_model.fit(X_train, y_train,
+                   batch_size=100,
+                   epochs=50,
+                   validation_data=(X_test, y_test))
+
+    # Model evaluation
+    test_loss, test_acc = best_model.evaluate(X_test, y_test)
+    print("Dev set accuracy: ", test_acc)
+    print("Dev set loss: ", test_loss)
+
+    # prediction
+    y_pred_probs = best_model.predict(X_test)
     y_pred = (y_pred_probs > 0.5).astype(int)
 
     # Evaluate the metrics to check accuracy, precision, recall, f1-score, confusion matrix and AUC
@@ -626,54 +721,3 @@ else:
     print(f'Loading {dustsourcespickle} as dataset')
     X_train, X_test, y_train, y_test, X, y = loadDatSet(df, window_size)
     fit_the_model_ann(X_train, X_test, y_train, y_test, X, y)
-
-
-###################################################################
-# #### HYPERPARAMETER TUNING ######################################
-###################################################################
-
-if FindBestParam:
-
-
-    #Define the parameter space to search over
-    param_grid = {
-       'max_depth': np.arange(5, 15),
-       'min_child_weight': np.arange(1, 3),
-       'subsample': np.arange(0.2, 0.9, 0.1),
-       'gamma': np.arange(0, 2, 0.1),
-       'reg_alpha': np.arange(0.4, 1.0, 0.1),
-       'reg_lambda': np.arange(0.4, 1.0, 0.1),
-       'learning_rate': np.arange(0.01, 0.2)
-    }
-
-    # param_grid = {
-    #     'max_depth': np.arange(5, 15),
-    #     'min_child_weight': np.arange(1, 3),
-    #     'subsample': np.arange(0.5, 0.9, 0.1),
-    #     'gamma': np.arange(0, 0.8, 0.1),
-    #     'reg_alpha': np.arange(0.4, 1.0, 0.1),
-    #     'reg_lambda': np.arange(0.4, 1.0, 0.1),
-    #     'learning_rate': np.arange(0.01, 0.2)
-    # }
-
-    # Create an instance of XGBoost classifier
-    tuning_model = xgb.XGBClassifier(objective='binary:logistic', eval_metric='auc', n_jobs=-1)
-    #
-    # gs = GridSearchCV(tuning_model, param_grid=param_grid, cv=4, n_jobs=2 )
-    #
-    # gs.fit(X_train,y_train)
-
-
-
-    # Create an instance of RandomizedSearchCV
-    rs = RandomizedSearchCV(tuning_model, param_distributions=param_grid, n_iter=100800, cv=6, verbose=0, random_state=42, n_jobs=-1)
-
-    # Fit the model to the data
-    rs.fit(X_train, y_train)
-    # print('GridSearchCV Best Parameters')
-    # print(gs.best_params_)
-    # Print the best hyperparameters
-    print('RandomizedSearchCV Best Parameters')
-    print('Best hyperparameters:', rs.best_params_)
-
-
