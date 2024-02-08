@@ -1,5 +1,5 @@
 Accuracy	Precision	Recall	F1-score	True negative	False positive	False negative	True positive	AUC
-82.30%	82.42%	82.87%	82.64%	143	32	31	150	82.29%
+80.34%	79.37%	82.87%	81.08%	136	39	31	150	80.29%
 
 The windows size is 7
 
