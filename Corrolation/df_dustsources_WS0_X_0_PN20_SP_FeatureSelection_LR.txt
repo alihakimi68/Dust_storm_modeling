@@ -1,0 +1,64 @@
+Best Feature names based on the Select K Best Features anaylsis
+(1780, 21)
+(1780, 15)
+['Soil_evaporation' 'Precipitation' 'Soil_moisture' 'NDVI' 'Elevation'
+ 'Distance_to_river' 'Slope' 'Bare_Soil' 'Cropland' 'Natural_vegetation'
+ 'Clay_Loam' 'Loam' 'Loam_Sand' 'Sand_Clay_Loam' 'Sand_Loam']
+##############################################
+CHi2 Best Feature analysis
+               Feature   Chi2_Stat       P_Value
+16                Loam  200.319538  1.778697e-45
+5            Elevation   98.337558  3.528106e-23
+20           Sand_Loam   97.790495  4.650747e-23
+12           Bare_Soil   92.889703  5.529143e-22
+13            Cropland   89.025381  3.897794e-21
+14  Natural_vegetation   77.797809  1.141467e-18
+19      Sand_Clay_Loam   64.042036  1.217926e-15
+17           Loam_Sand   54.779228  1.348586e-13
+11               Slope   49.960179  1.568980e-12
+2        Precipitation   46.739142  8.109302e-12
+3        Soil_moisture   31.925733  1.601810e-08
+10   Distance_to_river   22.932418  1.677980e-06
+15           Clay_Loam   21.293152  3.941370e-06
+0     Soil_evaporation   16.448914  4.997879e-05
+4                 NDVI   12.828993  3.412894e-04
+18                Sand   11.209518  8.137887e-04
+1                Lakes    7.223191  7.196767e-03
+6               Aspect    0.654249  4.185977e-01
+9    Profile_curvature    0.003905  9.501714e-01
+7            Curvature    0.003382  9.536228e-01
+8       Plan_curvature    0.000193  9.889042e-01
+##############################################
+Best Feature names based on the Select L1 Regularization analysis
+Training accuracy:  0.7991573033707865
+Test accuracy:  0.8370786516853933
+Bias:  [-0.00023694]
+[[ -1.70123403  -1.74784783  -0.93874065  -2.72556933  -2.22934964
+  -11.33856467   0.13407134   0.           0.           4.4955039
+   -2.42471701   0.4331271    1.01327175   0.1542302    0.85266461
+    0.          -0.98758343   0.54354038  -0.75200415   0.39336749
+    0.36803955]]
+C:\Users\Optimus\anaconda3\envs\Dstorm_311_test\Lib\site-packages\sklearn\linear_model\_coordinate_descent.py:614: ConvergenceWarning: Objective did not converge. You might want to increase the number of iterations. Duality gap: 0.2967712879180908, tolerance: 0.08829999715089798
+  model = cd_fast.enet_coordinate_descent_gram(
+C:\Users\Optimus\anaconda3\envs\Dstorm_311_test\Lib\site-packages\sklearn\linear_model\_coordinate_descent.py:614: ConvergenceWarning: Objective did not converge. You might want to increase the number of iterations. Duality gap: 1.1157381534576416, tolerance: 0.08829999715089798
+  model = cd_fast.enet_coordinate_descent_gram(
+##############################################
+Best Feature names based on Recursive Feature Selection
+[ True  True  True  True  True  True False False False  True  True  True
+  True False  True False  True  True  True  True False]
+Index(['Lakes', 'Precipitation', 'Soil_moisture', 'NDVI', 'Elevation',
+       'Aspect', 'Distance_to_river', 'Slope', 'dust_storm', 'Bare_Soil',
+       'Natural_vegetation', 'Loam', 'Loam_Sand', 'Sand', 'Sand_Clay_Loam'],
+      dtype='object')
+##############################################
+Best Feature names based on Sequential Feature Selection
+Training accuracy:  0.7991573033707865
+Test accuracy:  0.8370786516853933
+Training accuracy:  0.8068820224719101
+Test accuracy:  0.848314606741573
+[ 1  2  5  6  7 10 11 12 13 14 16 17 18 19 20]
+Index(['Precipitation', 'Soil_moisture', 'Aspect', 'Curvature',
+       'Plan_curvature', 'Slope', 'dust_storm', 'Bare_Soil', 'Cropland',
+       'Natural_vegetation', 'Loam', 'Loam_Sand', 'Sand', 'Sand_Clay_Loam',
+       'Sand_Loam'],
+      dtype='object')
