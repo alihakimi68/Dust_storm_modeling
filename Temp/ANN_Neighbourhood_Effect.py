@@ -66,7 +66,7 @@ import shutil
 # #### Data Path ##################################################
 ###################################################################
 
-os.chdir("D:/University/DustStorming/ToAli/DustStormModeling/For training/")
+os.chdir("/For training/")
 
 ###################################################################
 # #### Default parameters #########################################
@@ -500,7 +500,7 @@ def fit_the_model_ann(X_train, X_test, y_train, y_test, X, y):
     # #### Fit the model and result ###################################
     ###################################################################
     if FindBestParam:
-        folder_path = "D:/University/DustStorming/ToAli/DustStormModeling/For training/untitled_project"
+        folder_path = "/For training/untitled_project"
         if os.path.exists(folder_path):
             shutil.rmtree(folder_path)
     else:

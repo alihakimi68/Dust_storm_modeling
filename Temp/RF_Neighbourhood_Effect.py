@@ -32,7 +32,7 @@ import rasterio
 from rasterio.windows import Window
 import geopandas as gpd
 import pandas as pd
-import xgboost as xgb
+from sklearn.ensemble import RandomForestClassifier
 import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split, GridSearchCV, cross_val_score, RandomizedSearchCV
 from sklearn.feature_selection import mutual_info_classif, RFE
@@ -48,7 +48,7 @@ from scipy.spatial.distance import cdist
 # #### Data Path ##################################################
 ###################################################################
 
-os.chdir("D:/University/DustStorming/ToAli/DustStormModeling/For training/")
+os.chdir("/For training/")
 
 ###################################################################
 # #### Default parameters #########################################
@@ -68,12 +68,12 @@ CalculateSeasons = False  # divide data in to 4 periods :
 
 numerical = {'Mean': False,
              'WMean': False,
-             'Variance': True,
+             'Variance': False,
              'Covariance': False,
-             'Median': True}
+             'Median': False}
 
-categorical = {'Entropy': True,
-               'Mode': True}
+categorical = {'Entropy': False,
+               'Mode': False}
 
 EmptyDf = pd.DataFrame(columns=['Soil_evaporation', 'Lakes', 'landcover', 'Precipitation', 'Soil_moisture',
                                 'NDVI', 'Elevation', 'soil_type', 'Aspect', 'Curvature', 'Plan_curvature',
@@ -446,6 +446,8 @@ def loadDatSet(df,window_size):
     # drop original categorical columns
     df = df.drop(columns=['X', 'Y','Year', 'landcover', 'soil_type'])
 
+    df.to_csv(f'{dustsourcespickle}.csv', index=False)
+
     X = df.drop(['dust_storm'], axis=1)
     # X = df.drop(['dust_storm','Lakes entropy','Loam Sand','Sand Clay Loam','Clay Loam',
     #              'Bare Soil','Cropland','Natural vegetation','Lakes mode','Precipitation median'], axis=1)
@@ -456,122 +458,75 @@ def loadDatSet(df,window_size):
     print(f'number of dust sources {value_counts.get(1, 0)}')
     print(f'number of none dust sources {value_counts.get(0, 0)}')
     df.to_csv(f'{dustsourcespickle}.csv', index=False)
-    # Split data to 70% training, 20% testing
+    # Split data to 80% training, 20% testing
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
     return X_train, X_test, y_train, y_test, X, y
 
-def fitTheModelXGboost(X_train, X_test, y_train, y_test,X, y):
+def fitTheModelRF(X_train, X_test, y_train, y_test,X, y):
     ###################################################################
     # #### Fit the model and result ###################################
     ###################################################################
     # Set hyperparameters
-    params = {}
-    params['objective'] = 'binary:logistic'
-    params['num_class'] = 1
-    params['eval_metric'] = 'auc'
 
-    if dustsourcespickle == 'df_dustsources_WS5_X_5_PN3_SP_Mea_WMe_Var_Cov_Med_Ent_Mod.pickle':
-        params['learning_rate'] = 0.01
-        params['max_depth'] = 7
-        params['min_child_weight'] = 2
-        params['reg_alpha'] = 0.8999999999999999
-        params['reg_lambda'] = 0.7999999999999999
-        params['subsample'] = 0.6
-        params['gamma'] = 0.1
-        params['num_parallel_tree'] = 2
-    elif dustsourcespickle == 'df_dustsources_WS7_X_7_PN3_SP_Mea_WMe_Var_Cov_Med_Ent_Mod.pickle':
-        # Hyper tuning for df_dustsources_WS7_X_7_PN3_SP_Mea_WMe_Var_Cov_Med_Ent_Mod.pickle
-        # GridSearchCV Best Parameters
-        # {'gamma': 0.0, 'learning_rate': 0.01, 'max_depth': 7, 'min_child_weight': 2, 'reg_alpha': 0.5, 'reg_lambda': 0.4, 'subsample': 0.7999999999999999}
-        # RandomizedSearchCV Best Parameters
-        # Best hyperparameters: {'subsample': 0.7999999999999999, 'reg_lambda': 0.4, 'reg_alpha': 0.5, 'min_child_weight': 2, 'max_depth': 7, 'learning_rate': 0.01, 'gamma': 0.0}
-        params['learning_rate'] = 0.01
-        params['max_depth'] = 7
-        params['min_child_weight'] = 2
-        params['reg_alpha'] = 0.5
-        params['reg_lambda'] = 0.4
-        params['subsample'] = 0.7999999999999999
-        params['gamma'] = 0
-        params['num_parallel_tree'] = 2
-    elif CalculateSeasons:
-        params['learning_rate'] = 0.02
-        # window size = 5: max_depth=7, window size = 7: max_depth=10
-        if window_size == 3:
-            params['max_depth'] = 5
-        elif window_size == 5:
-            params['max_depth'] = 8
-        elif window_size == 7:
-            params['max_depth'] = 11
-        elif window_size == 9:
-            params['max_depth'] = 11
-        elif window_size == 11:
-            params['max_depth'] = 11
-        else:
-            params['max_depth'] = 5
-        params['min_child_weight'] = 2
-        params['reg_alpha'] = 0.6
-        params['reg_lambda'] = 0.7
-        params['subsample'] = 0.7
-        params['gamma'] = 0.2
-        params['num_parallel_tree'] = 2
+    # For Mean Weight
+    if dustsourcespickle == 'df_dustsources_WS7_X_7_PN20_SP_WMe_':
+        params = {}
+        params['n_estimators'] = 984
+        params['max_depth'] = 11
+        params['max_features'] = 10
+        params['criterion'] = 'entropy'
+        # params['ccp_alpha'] = 0.04705446849512227
+        params['max_leaf_nodes'] = 36
+        params['max_samples'] = 0.6097231716035652
+        # params['min_impurity_decrease'] = 0.011942180975278128
+        params['min_samples_split'] = 4
+        params['min_samples_leaf'] = 6
+        # params['min_weight_fraction_leaf'] = 0.035973179619720186
+        params['n_jobs'] = -1
+        # params['bootstrap'] = True
+    elif dustsourcespickle == 'df_dustsources_WS7_X_7_PN20_SP_Var_Med_Ent_Mod_':
+        # For Var, Med, entropy, mode
+        params = {}
+        params['n_estimators'] = 776
+        params['max_depth'] = 10
+        params['max_features'] = 9
+        params['criterion'] = 'gini'
+        # params['ccp_alpha'] = 0.04705446849512227
+        params['max_leaf_nodes'] = 91
+        params['max_samples'] = 0.9918721448107347
+        # params['min_impurity_decrease'] = 0.011942180975278128
+        params['min_samples_split'] = 4
+        params['min_samples_leaf'] = 5
+        # params['min_weight_fraction_leaf'] = 0.035973179619720186
+        params['n_jobs'] = -1
+        # params['bootstrap'] = True
+
     else:
-        params['learning_rate'] = 0.01
-        # window size = 5: max_depth=7, window size = 7: max_depth=10
-        if window_size == 3:
-            params['max_depth'] = 5
-        elif window_size == 5:
-            params['max_depth'] = 8
-        elif window_size == 7:
-            params['max_depth'] = 11
-        elif window_size == 9:
-            params['max_depth'] = 11
-        elif window_size == 11:
-            params['max_depth'] = 11
-        else:
-            params['max_depth'] = 5
-        params['min_child_weight'] = 2
-        params['reg_alpha'] = 0.4
-        params['reg_lambda'] = 0.7
-        params['subsample'] = 0.7
-        params['gamma'] = 0.5
-        params['num_parallel_tree'] = 2
-        # params['n_estimators'] = 2
-
-
-        # params['learning_rate'] = 0.01
-        # # window size = 5: max_depth=7, window size = 7: max_depth=10
-        # if window_size == 3:
-        #     params['max_depth'] = 5
-        # elif window_size == 5:
-        #     params['max_depth'] = 8
-        # elif window_size == 7:
-        #     params['max_depth'] = 11
-        # elif window_size == 9:
-        #     params['max_depth'] = 11
-        # elif window_size == 11:
-        #     params['max_depth'] = 11
-        # else:
-        #     params['max_depth'] = 5
-        # params['min_child_weight'] = 2
-        # params['reg_alpha'] = 0.4
-        # params['reg_lambda'] = 0.5
-        # params['subsample'] = 0.7
-        # params['gamma'] = 0
-        # params['num_parallel_tree'] = 2
-
-
-
+        # For default
+        params = {}
+        params['n_estimators'] = 776
+        params['max_depth'] = 10
+        params['max_features'] = 9
+        params['criterion'] = 'gini'
+        # params['ccp_alpha'] = 0.04705446849512227
+        params['max_leaf_nodes'] = 91
+        params['max_samples'] = 0.9918721448107347
+        # params['min_impurity_decrease'] = 0.011942180975278128
+        params['min_samples_split'] = 4
+        params['min_samples_leaf'] = 5
+        # params['min_weight_fraction_leaf'] = 0.035973179619720186
+        params['n_jobs'] = -1
+        # params['bootstrap'] = True
 
     # Create an XGBoost classifier with the hyperparameters dictionary
-    xgb_model = xgb.XGBClassifier(**params)
+    RF_model = RandomForestClassifier(**params)
 
     # Fit the XGBoost model to the training data
-    xgb_model.fit(X_train, y_train)
+    RF_model.fit(X_train, y_train)
 
+    print('########### Predict metrics result for test obs ##########')
     # Predict class labels
-    # y_pred = xgb_model.predict(X_val) # validation set
-    y_pred = xgb_model.predict(X_test)  # final test set
-    # y_pred = (y_pred_probs2 > 0.5).astype(int)
+    y_pred = RF_model.predict(X_test)  # final test set
 
 
     # Evaluate the metrics to check accuracy, precision, recall, f1-score, confusion matrix and AUC
@@ -593,7 +548,7 @@ def fitTheModelXGboost(X_train, X_test, y_train, y_test,X, y):
     print('AUC: {:.2f}%'.format(auc * 100))
 
     # Cross validation
-    scores = cross_val_score(xgb_model, X, y, cv=6)
+    scores = cross_val_score(RF_model, X, y, cv=6)
     print('The cross validation accuracies of the model are', scores)
     print('The cross validation accuracy of the model is', np.mean(scores))
 
@@ -601,7 +556,7 @@ def fitTheModelXGboost(X_train, X_test, y_train, y_test,X, y):
     original_stdout = sys.stdout
 
     # Specify the file path where you want to save the results
-    file_path = f'{dustsourcespickle}_Results_XGBoost.txt'
+    file_path = f'{dustsourcespickle}_Results_RF.txt'
 
     # Open the file in write mode
     with open(file_path, 'w') as file:
@@ -620,7 +575,7 @@ def fitTheModelXGboost(X_train, X_test, y_train, y_test,X, y):
         ))
 
         # Cross validation
-        scores = cross_val_score(xgb_model, X, y, cv=5)
+        scores = cross_val_score(RF_model, X, y, cv=5)
         print('\nThe cross validation accuracies of the model are', scores)
         print('The cross validation accuracy of the model is', np.mean(scores))
         print('\nThe windows size is', window_size)
@@ -631,7 +586,7 @@ def fitTheModelXGboost(X_train, X_test, y_train, y_test,X, y):
     # Print a message indicating that the results have been saved
     print(f'Results have been saved to {file_path}')
 
-    feature_importances = xgb_model.feature_importances_ * 100
+    feature_importances = RF_model.feature_importances_ * 100
     feature_names = X_train.columns
     # Sort features based on their importance
     sorted_indices = np.argsort(feature_importances)[::-1]
@@ -650,9 +605,27 @@ def fitTheModelXGboost(X_train, X_test, y_train, y_test,X, y):
     plt.savefig(f'{dustsourcespickle}_Results_RF.png', bbox_inches='tight')
     plt.show()
 
+    print('########### Predict metrics result for test obs ##########')
+    # Predict class labels
+    y_pred_all = RF_model.predict(X)  # final test set
 
+    # Evaluate the metrics to check accuracy, precision, recall, f1-score, confusion matrix and AUC
+    accuracy_all = accuracy_score(y, y_pred_all)
+    precision_all = precision_score(y, y_pred_all)
+    recall_all = recall_score(y, y_pred_all)
+    f1_all = f1_score(y, y_pred_all)
+    conf_matrix_all = confusion_matrix(y, y_pred_all)
+    auc_all = roc_auc_score(y, y_pred_all)
 
-
+    # Print the metrics
+    print("Accuracy: {:.2f}%".format(accuracy_all * 100))
+    print("Precision: {:.2f}%".format(precision_all * 100))
+    print("Recall: {:.2f}%".format(recall_all * 100))
+    print("F1-score: {:.2f}%".format(f1_all * 100))
+    print('Confusion matrix:\n True negative: %s \
+                  \n False positive: %s \n False negative: %s \n True positive: %s'
+          % (conf_matrix_all[0, 0], conf_matrix_all[0, 1], conf_matrix_all[1, 0], conf_matrix_all[1, 1]))
+    print('AUC: {:.2f}%'.format(auc_all * 100))
 
 if CalculateSeasons:
     print(f'CalculateSeasons is set to {CreateDataSet}')
@@ -665,7 +638,7 @@ if CalculateSeasons:
         dustsourcespickle = f'df_dustsources_WS{window_size}_X_{window_size}_PN{PeriodName}_SP_{statisticalParams}'
         df = pk.load(open(f'{dustsourcespickle}.pickle', 'rb'))
         X_train, X_test, y_train, y_test, X, y = loadDatSet(df,window_size)
-        fitTheModelXGboost(X_train, X_test, y_train, y_test,X, y)
+        fitTheModelRF(X_train, X_test, y_train, y_test,X, y)
 else:
     print(f'CalculateSeasons is set to {CreateDataSet}')
     PeriodName = len(year_list)
@@ -681,7 +654,7 @@ else:
 
     print(f'Loading {dustsourcespickle} as dataset')
     X_train, X_test, y_train, y_test, X, y = loadDatSet(df, window_size)
-    fitTheModelXGboost(X_train, X_test, y_train, y_test,X, y)
+    fitTheModelRF(X_train, X_test, y_train, y_test,X, y)
 
 
 ###################################################################

@@ -22,6 +22,7 @@ from sklearn.model_selection import cross_val_score, StratifiedKFold
 import geopandas as gpd
 from shapely.geometry import Point
 from sklearn.linear_model import LinearRegression
+from fiona.crs import from_epsg
 
 ################### Configuration #####################
 kernel = 'adaptive' # adaptive or fixed
@@ -32,42 +33,61 @@ giveclassweight = True
 givesampleweight = True
 n_splits = 5 # cross validation folds
 LocalCrossValidation = False # Performs Cross validation on local models with n_splits
-Case = 'Classification' # Classification or Regression
+Case = 'Regression' # Classification or Regression
 importance_threshold = 0 # Removes less important features from Global Model
 InBagSamples = 0.6 # from 0.5 to 0.9 for local models weighted bootstrapping
 AnalyzeResiduales = True
+plotFeatureImportance = True
+exportLocalFeatureImportanceSHP = True
+DatasetToAnalyze = 'WindowsMVEM' # Main , Distance, WindowsWMe, WindowsMVEM
 ################### Import the dataset #####################
 
 os.chdir("D:/University/DustStorming/ToAli/DustStormModeling/For training/")
 
-
-dustsourcespickle = 'df_dustsources_WS0_X_0_PN20_SP__'
-# dustsourcespickle = 'df_dustsources_WS0_X_0_PN20_SP__Dist_WS'
-
-
-
-df = pk.load(open(f'{dustsourcespickle}.pickle', 'rb'))
-
-df = df.dropna()
-
-df.reset_index(drop=True, inplace=True)
-
-coords = df[['X', 'Y']]
-
-######## No Dist
-df = df.drop(columns=['Year','Profile_curvature','Plan_curvature','X','Y'])
-Numerical_cols = ['Soil_evaporation', 'Precipitation', 'Soil_moisture', 'NDVI',
-       'Elevation', 'Aspect', 'Curvature', 'Distance_to_river', 'Slope', 'Wind_Speed']
-
-Categorical_cols = ['Lakes','landcover_Cropland','landcover_Natural_vegetation',
-                'soil_type_Clay_Loam', 'soil_type_Loam','soil_type_Loam_Sand',
-                'soil_type_Sand', 'soil_type_Sand_Clay_Loam','soil_type_Sand_Loam',
-                'soil_type_Silt']
+if DatasetToAnalyze == 'Main':
+    dustsourcespickle = 'df_dustsources_WS0_X_0_PN20_SP___WS'
+elif DatasetToAnalyze == 'Distance':
+    dustsourcespickle = 'df_dustsources_WS0_X_0_PN20_SP__Dist_WS'
+elif DatasetToAnalyze == 'WindowsWMe':
+    dustsourcespickle = 'df_dustsources_WS7_X_7_PN20_SP_WMe___WS'
+elif DatasetToAnalyze == 'WindowsMVEM':
+    dustsourcespickle = 'df_dustsources_WS7_X_7_PN20_SP_Var_Med_Ent_Mod__WS'
 
 
 
+dataset = pk.load(open(f'{dustsourcespickle}.pickle', 'rb'))
+dataset = dataset.dropna()
+
+dataset.reset_index(drop=True, inplace=True)
+
+
+if DatasetToAnalyze == 'Main':
+    dataset = dataset.drop(columns=['Year', 'Profile_curvature', 'Plan_curvature'])
+elif DatasetToAnalyze == 'Distance':
+    dataset = dataset.drop(columns=['Year', 'Profile_curvature', 'Plan_curvature',
+                                    'Lakes','soil_type_Silt',
+                                    'landcover_Cropland','landcover_Natural_vegetation'])
+elif DatasetToAnalyze == 'WindowsWMe':
+    dataset = dataset.drop(columns=['Year','Lakes', 'Precipitation wmean', 'Aspect', 'Curvature', 'landcover_Cropland',
+                                     'soil_type_Clay_Loam', 'soil_type_Loam_Sand', 'soil_type_Sand_Clay_Loam',
+                                     'soil_type_Sand_Loam', 'soil_type_Silt', 'Profile_curvature', 'Plan_curvature',
+                                     'Plan_curvature wmean', 'Profile_curvature wmean'])
+
+elif DatasetToAnalyze == 'WindowsMVEM':
+    dataset = dataset.drop(columns=['Year','Soil_evaporation median', 'Lakes', 'Lakes entropy', 'Lakes mode',
+                                    'landcover mode', 'Precipitation',
+                                    'Precipitation variance', 'Precipitation median', 'NDVI variance', 'Aspect',
+                                    'Aspect variance', 'Aspect median', 'Curvature', 'Curvature median',
+                                    'Distance_to_river variance',
+                                    'Slope', 'Slope variance', 'Slope median',
+                                    'Wind_Speed variance', 'landcover_Cropland', 'landcover_Natural_vegetation',
+                                    'soil_type_Clay_Loam', 'soil_type_Loam_Sand',
+                                    'soil_type_Sand_Clay_Loam', 'soil_type_Sand_Loam',
+                                    'soil_type_Silt', 'Plan_curvature', 'Plan_curvature variance',
+                                    'Plan_curvature median', 'Profile_curvature',
+                                    'Profile_curvature variance', 'Profile_curvature median'])
 # Assuming 'dust_storm' is the column you want to exclude
-columns_to_scale = [col for col in df.columns if col not in ['dust_storm','Lakes']]
+columns_to_scale = [col for col in dataset.columns if col not in ['dust_storm','Lakes','X','Y']]
 
 
 
@@ -75,35 +95,49 @@ columns_to_scale = [col for col in df.columns if col not in ['dust_storm','Lakes
 scaler = MinMaxScaler()
 
 # Fit and transform the specified columns
-df[columns_to_scale] = scaler.fit_transform(df[columns_to_scale])
+dataset[columns_to_scale] = scaler.fit_transform(dataset[columns_to_scale])
+
+
+# Step 2: Generate random indices for 10% of the dataframe
+num_samples = int(len(dataset) * 0.1)  # 10% of dataframe size
+random_indices = np.random.choice(dataset.index, num_samples, replace=False)
+
+Vdf = dataset.loc[random_indices]
+Vcoords = Vdf[['X', 'Y']]
+Vdf = Vdf.drop(columns=['X', 'Y'])
+
+df = dataset.drop(random_indices)
+coords = df[['X', 'Y']]
+df = df.drop(columns=['X', 'Y'])
 dframe = df.copy()
 
 X = df.drop(['dust_storm'], axis=1)
 y = df['dust_storm']
+
+# Split the training data into train and validation sets (80% train, 20% validation)
 X_train, X_test, y_train, y_test = train_test_split(X,y,test_size=0.2,random_state=0,stratify=y)
 
 if Case == 'Classification':
     print('############ Global model Metrics, binary classification #############')
 
-    # if AnalyzeResiduales:
-    #     # Initialize the logistic regression model
-    #     LinearModel = LogisticRegression()
-    #
-    #     # Train the model on the training data
-    #     LinearModel.fit(X_train, y_train)
-    #
-    #     # Make predictions on the testing data
-    #     predictions = LinearModel.predict(X_test)
-    #
-    #     # Evaluate the model
-    #     accuracy = accuracy_score(y_test, predictions)
-    #     residual = y_test - predictions
-    #
-    #     # Find indices where residual is not equal to 0
-    #     Nonlinearindices = np.where(residual != 0)[0]
-    #     X_residuals = X_test.iloc[Nonlinearindices]
-    #     y_residuals = y_test.iloc[Nonlinearindices]
-    #     print('finish')
+    if AnalyzeResiduales:
+        # Initialize the logistic regression model
+        LinearModel = LogisticRegression()
+
+        # Train the model on the training data
+        LinearModel.fit(X_train, y_train)
+
+        # Make predictions on the testing data
+        predictions = LinearModel.predict(X_test)
+
+        # Evaluate the model
+        accuracy = accuracy_score(y_test, predictions)
+        residual = y_test - predictions
+        print(f'Accuracy of Linear Global model is {accuracy * 100}')
+        # Find indices where residual is not equal to 0
+        Nonlinearindices = np.where(residual != 0)[0]
+        X_residuals = X_test.iloc[Nonlinearindices]
+        y_residuals = y_test.iloc[Nonlinearindices]
 
 
     # Additional stopping parameters
@@ -159,15 +193,16 @@ if Case == 'Classification':
     sorted_feature_importances = feature_importances[sorted_indices]
     sorted_feature_names = [feature_names[i] for i in sorted_indices]
 
-    # # Plotting
-    # plt.figure(figsize=(10, 6))
-    # plt.bar(range(len(feature_importances)), sorted_feature_importances, align="center")
-    # plt.xticks(range(len(feature_importances)), sorted_feature_names, rotation=45)
-    # plt.xlabel("Feature")
-    # plt.ylabel("Feature Importance (%)")
-    # plt.title("Feature Importance Plot")
-    # plt.tight_layout()
-    # plt.show()
+    if plotFeatureImportance:
+        # Plotting
+        plt.figure(figsize=(10, 6))
+        plt.bar(range(len(feature_importances)), sorted_feature_importances, align="center")
+        plt.xticks(range(len(feature_importances)), sorted_feature_names, rotation=45, ha='right')
+        plt.xlabel("Feature")
+        plt.ylabel("Feature Importance (%)")
+        plt.title("Feature Importance Plot")
+        plt.tight_layout()
+        plt.show()
 
 
 
@@ -177,31 +212,24 @@ if Case == 'Classification':
 elif Case =='Regression':
     print('############ Global model Metrics, Regression #############')
 
-    # if AnalyzeResiduales:
-    #     # Initializing and fitting the linear regression model
-    #     LinearModel = LinearRegression()
-    #     LinearModel.fit(X, y)
-    #
-    #     # Making predictions on the testing set
-    #     y_pred = LinearModel.predict(X)
-    #
-    #     # Calculating residuals
-    #     residuals = y - y_pred
-    #
-    #     # Optionally, you can also calculate mean squared error (MSE) or other evaluation metrics
-    #     mse = np.mean((y_pred - y) ** 2)
-    #     print("Mean Squared Error:", mse)
-    #
-    #     plt.figure(figsize=(8, 6))
-    #     plt.scatter(coords['X'], coords['Y'], c=residuals, cmap='coolwarm', alpha=0.7)
-    #     plt.colorbar(label='Residuals')
-    #     plt.xlabel('X')
-    #     plt.ylabel('Y')
-    #     plt.title('Residuals vs Coordinates')
-    #     plt.grid(True)
-    #     plt.show()
+    if AnalyzeResiduales:
+        # Initialize the logistic regression model
+        LinearModel = LogisticRegression()
 
+        # Train the model on the training data
+        LinearModel.fit(X_train, y_train)
 
+        # Make predictions on the testing data
+        predictions = LinearModel.predict(X_test)
+
+        # Evaluate the model
+        accuracy = accuracy_score(y_test, predictions)
+        residual = y_test - predictions
+
+        # Find indices where residual is not equal to 0
+        Nonlinearindices = np.where(residual != 0)[0]
+        X_residuals = X_test.iloc[Nonlinearindices]
+        y_residuals = y_test.iloc[Nonlinearindices]
 
     # Additional stopping parameters for regression
     params = {
@@ -267,21 +295,22 @@ elif Case =='Regression':
     sorted_feature_importances = feature_importances[sorted_indices]
     sorted_feature_names = [feature_names[i] for i in sorted_indices]
 
-    # # Plotting
-    # plt.figure(figsize=(10, 6))
-    # plt.bar(range(len(feature_importances)), sorted_feature_importances, align="center")
-    # plt.xticks(range(len(feature_importances)), sorted_feature_names, rotation=45)
-    # plt.xlabel("Feature")
-    # plt.ylabel("Feature Importance (%)")
-    # plt.title("Feature Importance Plot")
-    # plt.tight_layout()
-    # plt.show()
+    if plotFeatureImportance:
+        # Plotting
+        plt.figure(figsize=(10, 6))
+        plt.bar(range(len(feature_importances)), sorted_feature_importances, align="center")
+        plt.xticks(range(len(feature_importances)), sorted_feature_names, rotation=45, ha='right')
+        plt.xlabel("Feature")
+        plt.ylabel("Feature Importance (%)")
+        plt.title("Feature Importance Plot")
+        plt.tight_layout()
+        plt.show()
 
     # Identify columns with low importance
     low_importance_columns = X_train.columns[feature_importances < importance_threshold]
 
 df_local = dframe.drop(low_importance_columns, axis=1)
-
+df_local['pointID'] = df_local.index
 
 # Calculate pairwise distances
 distance_array = pdist(coords)
@@ -353,8 +382,8 @@ def bootstrapWeighted(X_train,y_train,case_weights,mincatobs,InBagSamples,n_spli
 obs = len(df_local)
 
 # Add 'pointID' column to 'dframe'
-df_local['pointID'] = range(0, len(df_local))
-coords['pointID'] = range(0, len(df_local))
+
+coords['pointID'] = df_local['pointID']
 
 prediction_df = pd.DataFrame(columns=['PointID', 'y_test_l', 'y_pred_l', 'TruePositive',
                                       'TrueNegative', 'FalsePositive', 'FalseNegative'])
@@ -435,7 +464,7 @@ for m in range(0,obs):
         Kernel_H = bw
 
     after_removal_coords = pd.merge(SubSet, coords, on='pointID', how='left')
-    layered_df_dict[m] = after_removal_coords
+    layered_df_dict[SubSet.loc[SubSet['DNeighbour'] == 0, 'pointID'].values[0]] = after_removal_coords
 
     # # Plotting latitude and longitude coordinates
     # plt.figure(figsize=(10, 8))
@@ -522,7 +551,7 @@ for m in range(0,obs):
         #### TEST PREDICTION
         y_pred_l = LO_Model.predict(X_test_l_noPID)
         local_model_accuracy = accuracy_score(y_test_l, y_pred_l)
-        local_models[m] = LO_Model
+        local_models[SubSet.loc[SubSet['DNeighbour'] == 0, 'pointID'].values[0]] = LO_Model
         if LocalCrossValidation:
             #Perform cross-validation
             cv_scores = cross_val_score(LO_Model, X_train_l_noPID, y_train_l_weighted, cv=n_splits, scoring='accuracy')
@@ -545,7 +574,7 @@ for m in range(0,obs):
         y_pred_l = (y_pred_regression > threshold).astype(int)
         local_model_accuracy = accuracy_score(y_test_l, y_pred_l)
 
-        local_models[m] = LO_Model
+        local_models[SubSet.loc[SubSet['DNeighbour'] == 0, 'pointID'].values[0]] = LO_Model
 
         if LocalCrossValidation:
             # Perform cross-validation
@@ -557,8 +586,8 @@ for m in range(0,obs):
             Local_models_cv.append(prediction_cv)
 
     feature_importances_local = LO_Model.feature_importances_ * 100
-    Feature_Importance_l[m] = feature_importances_local
-    local_model_accuracy_l[m] = local_model_accuracy
+    Feature_Importance_l[SubSet.loc[SubSet['DNeighbour'] == 0, 'pointID'].values[0]] = feature_importances_local
+    local_model_accuracy_l[SubSet.loc[SubSet['DNeighbour'] == 0, 'pointID'].values[0]] = local_model_accuracy
 
     prediction_row = pd.DataFrame({'PointID': X_test_l['pointID'],
                                    'y_test_l': y_test_l,
@@ -614,7 +643,6 @@ aggregated_df = prediction_df.groupby('PointID').agg({
 aggregated_df['MajorityClass'] = aggregated_df[['TruePositive', 'TrueNegative', 'FalsePositive', 'FalseNegative']].idxmax(axis=1)
 
 
-aggregated_df['MajorityClass'].value_counts().get('FalseNegative', 0)
 # Calculate counts for TruePositive, TrueNegative, FalsePositive, and FalseNegative
 tp_count = aggregated_df['MajorityClass'].value_counts().get('TruePositive', 0)
 tn_count = aggregated_df['MajorityClass'].value_counts().get('TrueNegative', 0)
@@ -711,98 +739,252 @@ print("OOB Precision: {:.2f}".format(precision_local_OOB*100))
 print("OOB Recall: {:.2f}".format(recall_local_OOB*100))
 print("OOB F1 Score: {:.2f}".format(f1_local_OOB*100))
 
+if exportLocalFeatureImportanceSHP:
+    temp_df = df_local.drop(['pointID', 'dust_storm'], axis=1)
+    ExportDF = pd.DataFrame()
+    Localfeature_df = pd.DataFrame.from_dict(Feature_Importance_l , orient='index', columns=temp_df.columns)
+    Localaccuracy_df = pd.DataFrame.from_dict(local_model_accuracy_l , orient='index', columns=['Accuracy'])
+    ExportDF = pd.concat([coords, Localfeature_df,Localaccuracy_df], axis=1)
+
+    # Convert latitude and longitude to a Point geometry
+    geometry = [Point(xy) for xy in zip(ExportDF['X'], ExportDF['Y'])]
+
+    # Create a GeoDataFrame
+    gdf = gpd.GeoDataFrame(ExportDF, geometry=geometry)
+
+    # Set the coordinate reference system (CRS) if needed
+    # For example, setting it to WGS 84 (EPSG:4326)
+    gdf.crs = from_epsg(4326)
+
+    # Save the GeoDataFrame as a shapefile
+    output_shapefile = f'GWML_XGBoost_{Case}.shp'
+    gdf.to_file(output_shapefile, driver='ESRI Shapefile')
+
+    # Optionally, you can also create a .prj file to specify the CRS
+    with open(output_shapefile.replace('.shp', '.prj'), 'w') as f:
+        f.write(gdf.crs.to_wkt())
 
 
+print('################ Models evaluation #############')
+X_evaluate = Vdf.drop(['dust_storm'], axis=1)
+y_evaluate = Vdf['dust_storm']
+if Case == 'Classification':
+    Global_model_y_predict = Gl_Model.predict(X_evaluate)
+    if AnalyzeResiduales:
+        Linear_model_y_predict = LinearModel.predict(X_evaluate)
+elif Case == 'Regression':
+    Global_model_y_predict_ = Gl_Model.predict(X_evaluate)
+    Global_model_y_predict = (Global_model_y_predict_ > threshold).astype(int)
+    if AnalyzeResiduales:
+        Linear_model_y_predict_ = LinearModel.predict(X_evaluate)
+        Linear_model_y_predict = (Linear_model_y_predict_ > threshold).astype(int)
+Global_model_y_predict = pd.Series(Global_model_y_predict, index=X_evaluate.index).reindex(X_evaluate.index)
+if AnalyzeResiduales:
+    Linear_model_y_predict = pd.Series(Linear_model_y_predict, index=X_evaluate.index).reindex(X_evaluate.index)
+
+
+# Calculate evaluation metrics
+conf_matrix = confusion_matrix(y_evaluate, Global_model_y_predict)
+accuracy = accuracy_score(y_evaluate, Global_model_y_predict)
+precision = precision_score(y_evaluate, Global_model_y_predict)
+recall = recall_score(y_evaluate, Global_model_y_predict)
+f1 = f1_score(y_evaluate, Global_model_y_predict)
+auc = roc_auc_score(y_evaluate, Global_model_y_predict)
+
+# Print evaluation metrics
+print('Evaluate Global model #####')
+print("Accuracy: {:.2f}%".format(accuracy * 100))
+print("Precision: {:.2f}%".format(precision * 100))
+print("Recall: {:.2f}%".format(recall * 100))
+print("F1-score: {:.2f}%".format(f1 * 100))
+print('Confusion matrix:\n True negative: %s \
+          \n False positive: %s \n False negative: %s \n True positive: %s'
+      % (conf_matrix[0, 0], conf_matrix[0, 1], conf_matrix[1, 0], conf_matrix[1, 1]))
+print('AUC: {:.2f}%'.format(auc * 100))
+
+print('Evaluate local model #####')
 
 # temp_df = df_local.drop(['pointID', 'dust_storm'], axis=1)
 # ExportDF = pd.DataFrame()
 # Localfeature_df = pd.DataFrame.from_dict(Feature_Importance_l , orient='index', columns=temp_df.columns)
 # Localaccuracy_df = pd.DataFrame.from_dict(local_model_accuracy_l , orient='index', columns=['Accuracy'])
 # ExportDF = pd.concat([coords, Localfeature_df,Localaccuracy_df], axis=1)
-#
-# # Convert latitude and longitude to a Point geometry
-# geometry = [Point(xy) for xy in zip(ExportDF['X'], ExportDF['Y'])]
-#
-# # Create a GeoDataFrame
-# gdf = gpd.GeoDataFrame(ExportDF, geometry=geometry)
-#
-# # Set the coordinate reference system (CRS) if needed
-# # For example, setting it to WGS 84 (EPSG:4326)
-# gdf.crs = 'EPSG:4326'
-#
-# # Save the GeoDataFrame as a shapefile
-# output_shapefile = 'output_shapefile.shp'
-# gdf.to_file(output_shapefile, driver='ESRI Shapefile')
-#
-# # Optionally, you can also create a .prj file to specify the CRS
-# with open(output_shapefile.replace('.shp', '.prj'), 'w') as f:
-#     f.write(gdf.crs.to_wkt())
-#
-# print('finish')
 
-# prediction_df_crossval = pd.DataFrame(columns=['PointID', 'y_test_l', 'y_pred_l', 'TruePositive',
-#                                       'TrueNegative', 'FalsePositive', 'FalseNegative'])
-# Local_X = X.drop(low_importance_columns, axis = 1)
-# skf = StratifiedKFold(n_splits=n_splits)
-# skf.get_n_splits(X, y)
-# accuracy_crossval = []
-#
-# for i, (train_index, test_index) in enumerate(skf.split(X, y)):
-#     print(f"Fold {i}:")
-#
-#     for trainindex in train_index:
-#         for testindex in test_index:
-#             PointID_crossval= []
-#             PointID_crossval = layered_df_dict[testindex]['pointID']
-#             x_crossval = Local_X.iloc[PointID_crossval]
-#
-#             y_predict_crossval = local_models[trainindex].predict(x_crossval)
-#             prediction_row_crossval = pd.DataFrame({'PointID': PointID_crossval,
-#                                            'y_test_l': y.loc[PointID_crossval],
-#                                            'y_pred_l': y_predict_crossval,
-#                                            'TruePositive': 0,
-#                                            'TrueNegative': 0,
-#                                            'FalsePositive': 0,
-#                                            'FalseNegative': 0}, )
-#             prediction_df_crossval = pd.concat([prediction_df_crossval, prediction_row_crossval], ignore_index=True)
-#
-#     for index, row in prediction_df_crossval.iterrows():
-#         if row['y_test_l'] == 1 and row['y_pred_l'] == 1:
-#             prediction_df_crossval.at[index, 'TruePositive'] = 1
-#         elif row['y_test_l'] == 0 and row['y_pred_l'] == 0:
-#             prediction_df_crossval.at[index, 'TrueNegative'] = 1
-#         elif row['y_test_l'] == 0 and row['y_pred_l'] == 1:
-#             prediction_df_crossval.at[index, 'FalsePositive'] = 1
-#         elif row['y_test_l'] == 1 and row['y_pred_l'] == 0:
-#             prediction_df_crossval.at[index, 'FalseNegative'] = 1
-#
-#     # Group by PointID and sum the values for each group
-#     aggregated_df_crossval = prediction_df_crossval.groupby('PointID').agg({
-#         'TruePositive': 'sum',
-#         'TrueNegative': 'sum',
-#         'FalsePositive': 'sum',
-#         'FalseNegative': 'sum'
-#     }).reset_index()
-#
-#     aggregated_df_crossval['MajorityClass'] = aggregated_df_crossval[
-#         ['TruePositive', 'TrueNegative', 'FalsePositive', 'FalseNegative']].idxmax(axis=1)
-#
-#     aggregated_df_crossval['MajorityClass'].value_counts().get('FalseNegative', 0)
-#     # Calculate counts for TruePositive, TrueNegative, FalsePositive, and FalseNegative
-#     tp_count_crossval = aggregated_df_crossval['MajorityClass'].value_counts().get('TruePositive', 0)
-#     tn_count_crossval = aggregated_df_crossval['MajorityClass'].value_counts().get('TrueNegative', 0)
-#     fp_count_crossval = aggregated_df_crossval['MajorityClass'].value_counts().get('FalsePositive', 0)
-#     fn_count_crossval = aggregated_df_crossval['MajorityClass'].value_counts().get('FalseNegative', 0)
-#
-#     TP_L_crossval = tp_count_crossval
-#     TN_L_crossval = tn_count_crossval
-#     FP_L_crossval = fp_count_crossval
-#     FN_L_crossval = fn_count_crossval
-#
-#     # Calculate performance metrics
-#     accuracy_local_crossval = (TP_L_crossval + TN_L_crossval) / (TP_L_crossval + TN_L_crossval + FP_L_crossval + FN_L_crossval)
-#     accuracy_crossval.append(accuracy_local_crossval)
-#
-# print(f"Accuracy cross validate for {n_splits}")
-# print(f"{accuracy_crossval}")
-# print(f"Mean cross validate values = {np.mean(accuracy_crossval)}")
+X_evaluate_local = X_evaluate.drop(low_importance_columns, axis=1)
+
+prediction_df_final = pd.DataFrame(columns=['PointID', 'y_test_l', 'y_pred_l', 'TruePositive_l',
+                                      'TrueNegative_l', 'FalsePositive_l', 'FalseNegative_l','NonLinear'])
+if AnalyzeResiduales:
+    common_numbers = [num for num in layered_df_dict.keys() if num in Nonlinearindices]
+for Index in X_evaluate_local.index:
+
+    X_prediction = X_evaluate_local.loc[[Index]]
+    y_actual = y_evaluate.loc[Index]
+    D = np.sqrt((Vcoords.loc[Index]['X'] - coords['X']) ** 2 + (Vcoords.loc[Index]['Y'] - coords['Y']) ** 2)
+    for key, item in layered_df_dict.items():
+        if D.loc[key] < np.max(layered_df_dict[key]['DNeighbour']):
+
+            if Case == 'Classification':
+                y_prediction_local = local_models[key].predict(X_prediction)
+            elif Case == 'Regression':
+                y_prediction_local_ = local_models[key].predict(X_prediction)
+                y_prediction_local = (y_prediction_local_ > threshold).astype(int)
+
+            prediction_row_final = pd.DataFrame({'PointID': [X_prediction.index[0]],
+                                                 'y_test_l': [y_actual],
+                                                 'y_pred_l': [y_prediction_local[0]],
+                                                 'TruePositive_l': 0,
+                                                 'TrueNegative_l': 0,
+                                                 'FalsePositive_l': 0,
+                                                 'FalseNegative_l': 0,
+                                                 'NonLinear': 0}, )
+            if AnalyzeResiduales:
+                if key in common_numbers:
+                    prediction_row_final['NonLinear'] = 1
+            prediction_df_final = pd.concat([prediction_df_final, prediction_row_final], ignore_index=True)
+
+
+        else:
+            pass
+
+
+# Calculate True Positive, True Negative, False Positive, False Negative for each row
+for index, row in prediction_df_final.iterrows():
+    if row['y_test_l'] == 1 and row['y_pred_l'] == 1:
+        prediction_df_final.at[index, 'TruePositive_l'] = 1
+    elif row['y_test_l'] == 0 and row['y_pred_l'] == 0:
+        prediction_df_final.at[index, 'TrueNegative_l'] = 1
+    elif row['y_test_l'] == 0 and row['y_pred_l'] == 1:
+        prediction_df_final.at[index, 'FalsePositive_l'] = 1
+    elif row['y_test_l'] == 1 and row['y_pred_l'] == 0:
+        prediction_df_final.at[index, 'FalseNegative_l'] = 1
+
+
+# Group by PointID and sum the values for each group
+aggregated_df_final = prediction_df_final.groupby('PointID').agg({
+    'TruePositive_l': 'sum',
+    'TrueNegative_l': 'sum',
+    'FalsePositive_l': 'sum',
+    'FalseNegative_l': 'sum',
+    'NonLinear': 'sum'
+}).reset_index()
+
+aggregated_df_final['MajorityClass'] = aggregated_df_final[['TruePositive_l', 'TrueNegative_l', 'FalsePositive_l', 'FalseNegative_l']].idxmax(axis=1)
+
+# Calculate counts for TruePositive, TrueNegative, FalsePositive, and FalseNegative
+tp_count_local_final = aggregated_df_final['MajorityClass'].value_counts().get('TruePositive_l', 0)
+tn_count_local_final = aggregated_df_final['MajorityClass'].value_counts().get('TrueNegative_l', 0)
+fp_count_local_final = aggregated_df_final['MajorityClass'].value_counts().get('FalsePositive_l', 0)
+fn_count_local_final = aggregated_df_final['MajorityClass'].value_counts().get('FalseNegative_l', 0)
+
+# Create a confusion matrix DataFrame
+confusion_matrix_local_final = pd.DataFrame({
+    'Predicted_Positive': [tp_count_local_final, fp_count_local_final],
+    'Predicted_Negative': [fn_count_local_final, tn_count_local_final]
+}, index=['Actual_Positive', 'Actual_Negative'])
+
+# Print or display the confusion matrix
+print('Confusion Matrix for Prediction')
+print(confusion_matrix_local_final)
+
+TP_local_final = tp_count_local_final
+TN_local_final = tn_count_local_final
+FP_local_final = fp_count_local_final
+FN_local_final = fn_count_local_final
+
+# Calculate performance metrics
+accuracy_local_final = (TP_local_final + TN_local_final) / (TP_local_final + TN_local_final + FP_local_final + FN_local_final)
+precision_local_final = TP_local_final / (TP_local_final + FP_local_final)
+recall_local_final = TP_local_final / (TP_local_final + FN_local_final)
+f1_local_final = 2 * precision_local_final * recall_local_final / (precision_local_final + recall_local_final)
+
+# Print or display the calculated metrics
+print("Accuracy: {:.2f}".format(accuracy_local_final*100))
+print("Precision: {:.2f}".format(precision_local_final*100))
+print("Recall: {:.2f}".format(recall_local_final*100))
+print("F1 Score: {:.2f}".format(f1_local_final*100))
+
+
+aggregated_df_final ['PID']= aggregated_df_final ['PointID']
+aggregated_df_final.set_index('PID', inplace=True)
+
+sorted_index = X_evaluate.index.intersection(aggregated_df_final.index).tolist()
+sorted_aggregated_df_final = aggregated_df_final.reindex(sorted_index)
+
+def map_predictions(row):
+    if row['MajorityClass'] == 'TruePositive_l' or row['MajorityClass'] == 'FalsePositive_l':
+        return 1
+    else:
+        return 0
+
+# Apply the function to create a new column with binary predictions
+sorted_aggregated_df_final['Binary_Predictions'] = sorted_aggregated_df_final.apply(map_predictions, axis=1)
+
+LastDataframe = pd.concat([Vdf['dust_storm'],Global_model_y_predict.rename('Global_Model'),sorted_aggregated_df_final['Binary_Predictions'],sorted_aggregated_df_final['PointID']], axis=1)
+threshold = 0.5
+LastDataframe['LinearCOmbination0.5'] = ((0.5 * LastDataframe['Global_Model'] + 0.5 * LastDataframe['Binary_Predictions'])> threshold).astype(int)
+LastDataframe['LinearCOmbination0.25'] = ((0.25 * LastDataframe['Global_Model'] + 0.75 * LastDataframe['Binary_Predictions'])> threshold).astype(int)
+LastDataframe['LinearCOmbination0.75'] = ((0.75 * LastDataframe['Global_Model'] + 0.25 * LastDataframe['Binary_Predictions'])> threshold).astype(int)
+
+
+# Calculate True Positives (TP)
+TP05 = ((LastDataframe['dust_storm'] == 1) & (LastDataframe['LinearCOmbination0.5'] == 1)).sum()
+TP025 = ((LastDataframe['dust_storm'] == 1) & (LastDataframe['LinearCOmbination0.25'] == 1)).sum()
+TP075 = ((LastDataframe['dust_storm'] == 1) & (LastDataframe['LinearCOmbination0.75'] == 1)).sum()
+
+# Calculate True Negatives (TN)
+TN05 = ((LastDataframe['dust_storm'] == 0) & (LastDataframe['LinearCOmbination0.5'] == 0)).sum()
+TN025 = ((LastDataframe['dust_storm'] == 0) & (LastDataframe['LinearCOmbination0.25'] == 0)).sum()
+TN075 = ((LastDataframe['dust_storm'] == 0) & (LastDataframe['LinearCOmbination0.75'] == 0)).sum()
+
+# Calculate False Positives (FP)
+FP05 = ((LastDataframe['dust_storm'] == 0) & (LastDataframe['LinearCOmbination0.5'] == 1)).sum()
+FP025 = ((LastDataframe['dust_storm'] == 0) & (LastDataframe['LinearCOmbination0.25'] == 1)).sum()
+FP075 = ((LastDataframe['dust_storm'] == 0) & (LastDataframe['LinearCOmbination0.75'] == 1)).sum()
+
+# Calculate False Negatives (FN)
+FN05 = ((LastDataframe['dust_storm'] == 1) & (LastDataframe['LinearCOmbination0.5'] == 0)).sum()
+FN025 = ((LastDataframe['dust_storm'] == 1) & (LastDataframe['LinearCOmbination0.25'] == 0)).sum()
+FN075 = ((LastDataframe['dust_storm'] == 1) & (LastDataframe['LinearCOmbination0.75'] == 0)).sum()
+
+# Calculate Accuracy
+accuracy05 = (TP05 + TN05) / (TP05 + TN05 + FP05 + FN05)
+accuracy025 = (TP025 + TN025) / (TP025 + TN025 + FP025 + FN025)
+accuracy075 = (TP075 + TN075) / (TP075 + TN075 + FP075 + FN075)
+
+print('################ Linear Combintion nof Global and local models')
+print(f'Accuracy for 0.5 weights for both Global and Local models = {accuracy05 * 100}')
+print(f'Accuracy for 0.25 weight for GLobal and 0.75 weight for Locals = {accuracy025 * 100}')
+print(f'Accuracy for 0.75 weight for GLobal and 0.25 weight for Locals = {accuracy075 * 100}')
+
+
+if AnalyzeResiduales:
+    print('########### Combination of linear global model with nonlinear local models ######### ')
+    LastLinearDataframe = pd.concat([Vdf['dust_storm'],Linear_model_y_predict.rename('Global_Model'),sorted_aggregated_df_final['Binary_Predictions'],sorted_aggregated_df_final['NonLinear'],sorted_aggregated_df_final['PointID']], axis=1)
+    threshold = 0.5
+    weight = sorted_aggregated_df_final['NonLinear']/np.sum(sorted_aggregated_df_final['NonLinear'])
+    LastDataframe['LinearCOmbination'] = (((1- weight) * LastDataframe['Global_Model'] + weight * LastDataframe['Binary_Predictions'])> threshold).astype(int)
+
+    # Calculate True Positives (TP)
+    TP05 = ((LastDataframe['dust_storm'] == 1) & (LastDataframe['LinearCOmbination0.5'] == 1)).sum()
+
+    # Calculate True Negatives (TN)
+    TN05 = ((LastDataframe['dust_storm'] == 0) & (LastDataframe['LinearCOmbination0.5'] == 0)).sum()
+
+    # Calculate False Positives (FP)
+    FP05 = ((LastDataframe['dust_storm'] == 0) & (LastDataframe['LinearCOmbination0.5'] == 1)).sum()
+
+    # Calculate False Negatives (FN)
+    FN05 = ((LastDataframe['dust_storm'] == 1) & (LastDataframe['LinearCOmbination0.5'] == 0)).sum()
+
+    # Calculate Accuracy
+    accuracy05 = (TP05 + TN05) / (TP05 + TN05 + FP05 + FN05)
+
+    print('################ Linear Combintion nof Global and local models')
+    print(f'Accuracy for linear combination = {accuracy05 * 100}')
+
+
+print('finish')
+
+
+

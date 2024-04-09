@@ -6,37 +6,59 @@ from scipy.spatial.distance import pdist, squareform
 import xgboost as xgb
 from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
 from sklearn.model_selection import RandomizedSearchCV
+import os
 
 from sklearn.preprocessing import MinMaxScaler
 import matplotlib.pyplot as plt
 from scipy.stats import randint
-
+import pickle as pk
 import random
 
 Model = 'XGB'
 HyperTune = False
 
-data_folder = "D:/University/DustStorming/ToAli/Geographically_weighted_random_forest/"
-df = pd.read_csv(data_folder + "df_dustsources_WS0_X_0_PN20_SP_.csv")
+os.chdir("/For training/")
+
+# For df_dustsources_WS0_X_0_PN20_SP_
+# dustsourcespickle = 'df_dustsources_WS0_X_0_PN20_SP_'
+# FeatureCount = 20
+# Estimator = 400
+
+# For df_dustsources_WS7_X_7_PN20_SP_Var_Med_Ent_Mod
+dustsourcespickle = 'df_dustsources_WS7_X_7_PN20_SP_Var_Med_Ent_Mod'
+# FeatureCount = 25
+# Estimator = 400
+# For df_dustsources_WS7_X_7_PN20_SP_WMe_
+# dustsourcespickle = 'df_dustsources_WS7_X_7_PN20_SP_WMe_'
+# FeatureCount = 15
+df = pk.load(open(f'{dustsourcespickle}.pickle', 'rb'))
+
+# drop original categorical columns
+# df = df.drop(columns=['X', 'Y','Year', 'landcover', 'soil_type'])
 
 # Check and remove NA values
 df = df.dropna()
 
-# Define the columns to scale
-columns_to_scale = ["Soil_evaporation", "Lakes", "Precipitation", "Soil_moisture",
-                    "NDVI", "Elevation", "Aspect", "Curvature", "Plan_curvature",
-                    "Profile_curvature", "Distance_to_river", "Slope"]
+columns_to_keep = ['Soil_evaporation variance', 'Soil_evaporation median', 'Lakes entropy',
+                   'Lakes mode', 'Precipitation variance', 'Precipitation median',
+                   'Soil_moisture variance', 'Soil_moisture median', 'NDVI variance','NDVI median',
+                   'Elevation variance', 'Elevation median','Aspect variance', 'Aspect median',
+                   'Curvature variance','Curvature median', 'Plan_curvature variance',
+                   'Plan_curvature median','Profile_curvature variance', 'Profile_curvature median',
+                   'Distance_to_river variance', 'Distance_to_river median','Slope variance',
+                   'Slope median', 'Bare_Soil', 'Cropland','Natural_vegetation', 'Clay_Loam',
+                   'Loam', 'Loam_Sand', 'Sand','Sand_Clay_Loam', 'Sand_Loam','dust_storm','X', 'Y']
+
+df = df.loc[:, columns_to_keep]
+
+# Assuming 'dust_storm' is the column you want to exclude
+columns_to_scale = [col for col in df.columns if col not in ['dust_storm', 'X', 'Y']]
 
 # Initialize the MinMaxScaler
 scaler = MinMaxScaler()
 
 # Fit and transform the specified columns
 df[columns_to_scale] = scaler.fit_transform(df[columns_to_scale])
-
-# Columns to convert to factors
-columns_to_convert = [2, 13] + list(range(17, 26))
-# print(df.columns)
-# df.iloc[:, columns_to_convert] = df.iloc[:, columns_to_convert].astype('category')
 
 # Drop 'Year' column
 #df = df.drop(columns=['Year'])
@@ -51,7 +73,7 @@ train_valid_df = train_valid_df.drop(columns=['X', 'Y'])
 X = train_valid_df.drop(['dust_storm'], axis=1)
 y = train_valid_df['dust_storm']
 X_train, X_test, y_train, y_test  = train_test_split(X, y, test_size=0.2,
-                                                                  random_state=42)
+                                                                  random_state=42, stratify=y)
 
 if HyperTune:
     param_dist = {
@@ -117,14 +139,14 @@ else:
     params['objective'] = 'binary:logistic'
     params['num_class'] = 1
     params['eval_metric'] = 'auc'
-    params['learning_rate'] = 0.01
+    params['learning_rate'] = 0.0980587910917366
     params['max_depth'] = 7
-    params['min_child_weight'] = 2
-    params['reg_alpha'] = 0.8999999999999999
-    params['reg_lambda'] = 0.7999999999999999
-    params['subsample'] = 0.6
-    params['gamma'] = 0.1
-    params['num_parallel_tree'] = 2
+    params['min_child_weight'] = 1
+    params['n_estimators'] = 695
+    params['colsample_bytree'] = 0.8523149652539629
+    params['subsample'] = 0.8976451164881573
+    # params['gamma'] = 0.1
+    # params['num_parallel_tree'] = 2
 
     Gl_Model = xgb.XGBClassifier(**params)
 
@@ -198,8 +220,8 @@ importance_threshold = 0
 # Identify columns with low importance
 low_importance_columns = X_train.columns[feature_importances < importance_threshold]
 # dframe = dframe_full.drop(low_importance_columns, axis=1)
-dframe = dframe_full.drop(['Lakes', 'Cropland', 'Natural_vegetation', 'Clay_Loam','Sand_Clay_Loam'], axis=1)
-
+# dframe = dframe_full.drop(['Lakes', 'Cropland', 'Natural_vegetation', 'Clay_Loam','Sand_Clay_Loam'], axis=1)
+dframe = dframe_full
 # Calculate pairwise distances
 distance_array = pdist(coords)
 
@@ -229,7 +251,7 @@ def bootstrapWeighted(X_train, y_train, case_weights):
     # Calculate the number of samples to select
     num_samples = len(X_train)
 
-    # Calculate the number of samples to be included in the bootstrap sample (80%)
+    # Calculate the number of samples to be included in the bootstrap sample (70%)
     num_bootstrap_samples = int(0.7 * num_samples)
 
     # Select the first 80% of indices without replacement based on case weights
@@ -293,8 +315,8 @@ for m in range(0,obs):
     coords['pointID'] = range(0, len(dframe))
 
     # Create a new DataFrame 'DataSet' with 'dframe' and 'DNeighbour'
-    DataSet = pd.DataFrame({'DNeighbour': DNeighbour})
-    DataSet = pd.concat([dframe, DataSet], axis=1)
+    DataSet = dframe.copy()
+    DataSet['DNeighbour'] = DNeighbour
 
     # Sort by distance
     DataSetSorted = DataSet.sort_values(by='DNeighbour')
@@ -640,3 +662,5 @@ print("F1 Score for the 2nd method of prediction: {:.2f}%".format(f1_local_2nd*1
 
 
 print('finish')
+
+

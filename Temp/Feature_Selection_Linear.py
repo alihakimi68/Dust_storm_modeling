@@ -11,7 +11,7 @@ from sklearn.metrics import accuracy_score
 import matplotlib.pyplot as plt
 import numpy as np
 
-os.chdir("D:/University/DustStorming/ToAli/DustStormModeling/For training/")
+os.chdir("/For training/")
 
 # For df_dustsources_WS0_X_0_PN20_SP_
 # dustsourcespickle = 'df_dustsources_WS0_X_0_PN20_SP_'
