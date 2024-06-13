@@ -29,7 +29,7 @@ To create the environment and install the required packages:
 
 
 - Combo_randomForest.py / Combo_XGBoost.py
-  - Random Search for tuning Spatial parameters
+  - Random Search for tuning Spatial parameters  (NAISS)
 
 - Feature_Selection_RF.py / Feature_Selection_XGBoost.py
   - Dimentionality reduction and Feature Selection
