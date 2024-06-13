@@ -44,7 +44,7 @@ To create the environment and install the required packages:
   - Random Search for huper paramter tuning (NAISS)
 
 - Test_bandwidth_GWML_RandomForest.py / Test_bandwidth_GWML_XGBoost.py
-  - Bandwidth Exploration
+  - Bandwidth Exploration (NAISS)
 
 - Test_HyperParameters_GWML_XGBoost.py / Test_HyperParameters_GWML_XGBoost.py
   - Hyper Parameter Exploration  (NAISS)
