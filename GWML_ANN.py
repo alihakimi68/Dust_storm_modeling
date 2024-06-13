@@ -8,7 +8,7 @@ from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from scipy.spatial.distance import pdist, squareform
-import xgboost as xgb
+import tensorflow as tf
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, recall_score, f1_score, roc_auc_score, classification_report
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score, make_scorer
@@ -22,7 +22,9 @@ from sklearn.model_selection import cross_val_score, StratifiedKFold
 import geopandas as gpd
 from shapely.geometry import Point
 from sklearn.linear_model import LinearRegression
-
+from fiona.crs import from_epsg
+from scikeras.wrappers import KerasClassifier, KerasRegressor
+from sklearn.utils import class_weight
 ################### Configuration #####################
 kernel = 'adaptive' # adaptive or fixed
 bw = 135 # Band Width for local models
@@ -37,37 +39,56 @@ importance_threshold = 0 # Removes less important features from Global Model
 InBagSamples = 0.6 # from 0.5 to 0.9 for local models weighted bootstrapping
 AnalyzeResiduales = True
 plotFeatureImportance = True
-exportLocalFeatureImportanceSHP = True
+exportLocalFeatureImportanceSHP = False
+DatasetToAnalyze = 'WindowsMVEM' # Main , Distance, WindowsWMe, WindowsMVEM
 ################### Import the dataset #####################
 
 os.chdir("D:/University/DustStorming/ToAli/DustStormModeling/For training/")
 
+if DatasetToAnalyze == 'Main':
+    dustsourcespickle = 'df_dustsources_WS0_X_0_PN20_SP___WS'
+elif DatasetToAnalyze == 'Distance':
+    dustsourcespickle = 'df_dustsources_WS0_X_0_PN20_SP__Dist_WS'
+elif DatasetToAnalyze == 'WindowsWMe':
+    dustsourcespickle = 'df_dustsources_WS7_X_7_PN20_SP_WMe___WS'
+elif DatasetToAnalyze == 'WindowsMVEM':
+    dustsourcespickle = 'df_dustsources_WS7_X_7_PN20_SP_Var_Med_Ent_Mod__WS'
 
-# dustsourcespickle = 'df_dustsources_WS0_X_0_PN20_SP__'
-# dustsourcespickle = 'df_dustsources_WS0_X_0_PN20_SP__Dist_WS'
-dustsourcespickle = 'df_dustsources_WS7_X_7_PN20_SP_Var_Med_Ent_Mod'
+
 
 dataset = pk.load(open(f'{dustsourcespickle}.pickle', 'rb'))
-
 dataset = dataset.dropna()
 
 dataset.reset_index(drop=True, inplace=True)
 
 
-######## No Dist
-dataset = dataset.drop(columns=['Year','Profile_curvature','Plan_curvature'])
-Numerical_cols = ['Soil_evaporation', 'Precipitation', 'Soil_moisture', 'NDVI',
-       'Elevation', 'Aspect', 'Curvature', 'Distance_to_river', 'Slope', 'Wind_Speed']
+if DatasetToAnalyze == 'Main':
+    dataset = dataset.drop(columns=['Year', 'Profile_curvature', 'Plan_curvature'])
+elif DatasetToAnalyze == 'Distance':
+    dataset = dataset.drop(columns=['Year', 'Profile_curvature', 'Plan_curvature',
+                                    'Lakes','soil_type_Silt',
+                                    'landcover_Cropland','landcover_Natural_vegetation'])
+elif DatasetToAnalyze == 'WindowsWMe':
+    dataset = dataset.drop(columns=['Year','Lakes', 'Precipitation wmean', 'Aspect', 'Curvature', 'landcover_Cropland',
+                                     'soil_type_Clay_Loam', 'soil_type_Loam_Sand', 'soil_type_Sand_Clay_Loam',
+                                     'soil_type_Sand_Loam', 'soil_type_Silt', 'Profile_curvature', 'Plan_curvature',
+                                     'Plan_curvature wmean', 'Profile_curvature wmean'])
 
-Categorical_cols = ['Lakes','landcover_Cropland','landcover_Natural_vegetation',
-                'soil_type_Clay_Loam', 'soil_type_Loam','soil_type_Loam_Sand',
-                'soil_type_Sand', 'soil_type_Sand_Clay_Loam','soil_type_Sand_Loam',
-                'soil_type_Silt']
-
-
-
+elif DatasetToAnalyze == 'WindowsMVEM':
+    dataset = dataset.drop(columns=['Year','Soil_evaporation median', 'Lakes', 'Lakes entropy', 'Lakes mode',
+                                    'landcover mode', 'Precipitation',
+                                    'Precipitation variance', 'Precipitation median', 'NDVI variance', 'Aspect',
+                                    'Aspect variance', 'Aspect median', 'Curvature', 'Curvature median',
+                                    'Distance_to_river variance',
+                                    'Slope', 'Slope variance', 'Slope median',
+                                    'Wind_Speed variance', 'landcover_Cropland', 'landcover_Natural_vegetation',
+                                    'soil_type_Clay_Loam', 'soil_type_Loam_Sand',
+                                    'soil_type_Sand_Clay_Loam', 'soil_type_Sand_Loam',
+                                    'soil_type_Silt', 'Plan_curvature', 'Plan_curvature variance',
+                                    'Plan_curvature median', 'Profile_curvature',
+                                    'Profile_curvature variance', 'Profile_curvature median'])
 # Assuming 'dust_storm' is the column you want to exclude
-columns_to_scale = [col for col in dataset.columns if col not in ['dust_storm','Lakes']]
+columns_to_scale = [col for col in dataset.columns if col not in ['dust_storm','Lakes','X','Y']]
 
 
 
@@ -113,32 +134,36 @@ if Case == 'Classification':
         # Evaluate the model
         accuracy = accuracy_score(y_test, predictions)
         residual = y_test - predictions
-
+        print(f'Accuracy of Linear Global model is {accuracy * 100}')
         # Find indices where residual is not equal to 0
         Nonlinearindices = np.where(residual != 0)[0]
         X_residuals = X_test.iloc[Nonlinearindices]
         y_residuals = y_test.iloc[Nonlinearindices]
 
-    # Additional stopping parameters
-    params = {
-        # Existing hyperparameters
-        'n_estimators': 111,
-        'max_depth': 12,
-        'max_features': 12,
-        'min_samples_split': 7,
-        'min_samples_leaf': 3,
-        'max_leaf_nodes': 99,
-        'criterion': 'gini',
-        'bootstrap': True,
-        'min_impurity_decrease': 0.0013063066126301594,
-        'ccp_alpha': 0.0030331248967434,
-        'max_samples': 0.32352782230151134
-    }
 
-    Gl_Model = RandomForestClassifier(**params)
-    Gl_Model.fit(X_train, y_train)
+    # Define a function that creates your Keras model
+    # Define a function that creates your Keras model
+    def create_model():
+        model = tf.keras.Sequential([
+            tf.keras.layers.Dense(64, activation='relu', input_shape=(X_train.shape[1],)),
+            tf.keras.layers.Dense(32, activation='relu'),
+            tf.keras.layers.Dense(1, activation='sigmoid')
+        ])
+        model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=1e-3),
+                      loss=tf.keras.losses.BinaryCrossentropy(),
+                      metrics=[tf.keras.metrics.BinaryAccuracy()])
+        return model
 
-    y_pred = Gl_Model.predict(X_test)
+
+    # Create a KerasClassifier based on your model-building function
+    Gl_Model = KerasClassifier(model=create_model, epochs=10, batch_size=32, verbose=0)
+
+    # Train the model
+    history = Gl_Model.fit(X_train, y_train)
+
+    # Evaluate the model
+    y_pred_proba = Gl_Model.predict(X_test)
+    y_pred = (y_pred_proba > 0.5).astype(int)
 
     # Perform cross-validation
     cv_scores = cross_val_score(Gl_Model, X_train, y_train, cv=n_splits,scoring='accuracy')  # Change cv value as needed
@@ -166,76 +191,71 @@ if Case == 'Classification':
           % (conf_matrix[0, 0], conf_matrix[0, 1], conf_matrix[1, 0], conf_matrix[1, 1]))
     print('AUC: {:.2f}%'.format(auc * 100))
 
-    feature_importances = Gl_Model.feature_importances_ * 100
-
-    feature_names = X_train.columns
-
-    # Sort features based on their importance
-    sorted_indices = np.argsort(feature_importances)[::-1]
-    sorted_feature_importances = feature_importances[sorted_indices]
-    sorted_feature_names = [feature_names[i] for i in sorted_indices]
-
-    if plotFeatureImportance:
-        # Plotting
-        plt.figure(figsize=(10, 6))
-        plt.bar(range(len(feature_importances)), sorted_feature_importances, align="center")
-        plt.xticks(range(len(feature_importances)), sorted_feature_names, rotation=45, ha='right')
-        plt.xlabel("Feature")
-        plt.ylabel("Feature Importance (%)")
-        plt.title("Feature Importance Plot")
-        plt.tight_layout()
-        plt.show()
-
+    # # Get the weights of the first layer
+    # weights = Gl_Model.model().layers[0].get_weights()[0]
+    #
+    # # Get feature names
+    # feature_names = X_train.columns
+    #
+    # # Calculate absolute weights
+    # abs_weights = np.abs(weights)
+    #
+    # # Sort features based on their absolute importance
+    # sorted_indices = np.argsort(abs_weights)[::-1]
+    # sorted_weights = abs_weights[sorted_indices]
+    # sorted_feature_names = [feature_names[i] for i in sorted_indices]
+    #
+    # if plotFeatureImportance:
+    #     # Plot the sorted weights
+    #     plt.figure(figsize=(10, 6))
+    #     plt.bar(range(len(sorted_weights)), sorted_weights.flatten())
+    #     plt.xticks(range(len(sorted_weights)), sorted_feature_names, rotation=45, ha='right')
+    #     plt.xlabel('Features')
+    #     plt.ylabel('Weights')
+    #     plt.title('Feature Importance')
+    #     plt.show()
+    #
 
 
     # Identify columns with low importance
-    low_importance_columns = X_train.columns[feature_importances < importance_threshold]
+    # low_importance_columns = X_train.columns[feature_importances < importance_threshold]
+    low_importance_columns = []
 
 elif Case =='Regression':
     print('############ Global model Metrics, Regression #############')
 
-    # if AnalyzeResiduales:
-    #     # Initializing and fitting the linear regression model
-    #     LinearModel = LinearRegression()
-    #     LinearModel.fit(X, y)
-    #
-    #     # Making predictions on the testing set
-    #     y_pred = LinearModel.predict(X)
-    #
-    #     # Calculating residuals
-    #     residuals = y - y_pred
-    #
-    #     # Optionally, you can also calculate mean squared error (MSE) or other evaluation metrics
-    #     mse = np.mean((y_pred - y) ** 2)
-    #     print("Mean Squared Error:", mse)
-    #
-    #     plt.figure(figsize=(8, 6))
-    #     plt.scatter(coords['X'], coords['Y'], c=residuals, cmap='coolwarm', alpha=0.7)
-    #     plt.colorbar(label='Residuals')
-    #     plt.xlabel('X')
-    #     plt.ylabel('Y')
-    #     plt.title('Residuals vs Coordinates')
-    #     plt.grid(True)
-    #     plt.show()
+    if AnalyzeResiduales:
+        # Initialize the logistic regression model
+        LinearModel = LogisticRegression()
+
+        # Train the model on the training data
+        LinearModel.fit(X_train, y_train)
+
+        # Make predictions on the testing data
+        predictions = LinearModel.predict(X_test)
+
+        # Evaluate the model
+        accuracy = accuracy_score(y_test, predictions)
+        residual = y_test - predictions
+
+        # Find indices where residual is not equal to 0
+        Nonlinearindices = np.where(residual != 0)[0]
+        X_residuals = X_test.iloc[Nonlinearindices]
+        y_residuals = y_test.iloc[Nonlinearindices]
 
     # Additional stopping parameters for regression
     params = {
-        # Existing hyperparameters
-        'n_estimators': 75,
-        'max_depth': 7,
-        'max_features': 6,
-        'max_leaf_nodes': 31,
-        'min_samples_split': 8,
-        'min_samples_leaf': 6,
-        'bootstrap': True,
-        'min_impurity_decrease': 0.0003043267155416363,
-        'ccp_alpha': 0.0009282310679697315,
-        'max_samples': 0.5,
-        # Additional regression-specific parameters
-        'criterion': 'squared_error'
+        'colsample_bytree': 0.9247455836661762,
+        'gamma': 0.29820290176358466,
+        'learning_rate': 0.027168933983876396,
+        'max_depth': 6,
+        'n_estimators': 237,
+        'reg_alpha': 0.8804846994706799,
+        'reg_lambda': 0.028063747200209987,
+        'subsample': 0.5701708183796725
     }
 
-    Gl_Model = RandomForestRegressor(**params)
+    Gl_Model = xgb.XGBRegressor(objective='reg:squarederror', **params)
     Gl_Model.fit(X_train, y_train)
 
     y_pred = Gl_Model.predict(X_test)
@@ -390,6 +410,8 @@ Feature_Importance_l = {}
 local_model_accuracy_l = {}
 Local_models_cv = []
 
+# Create a KerasClassifier based on your model-building function
+LO_Model = KerasClassifier(model=create_model, epochs=10, batch_size=32, verbose=0)
 
 for m in range(0,obs):
     # Get the data
@@ -505,9 +527,10 @@ for m in range(0,obs):
     X_OOB_noPID = X_OOB.drop(['pointID','DNeighbour'], axis=1)
     X_train_l_main_noPID = X_train_l.drop(['pointID','DNeighbour'], axis=1)
 
+
     if Case == 'Classification':
         #### Class Weights
-        # Calculate class weights
+        #Calculate class weights
         num_class_0_train = sum(y_train_l_weighted == 0)
         num_class_1_train = sum(y_train_l_weighted == 1)
         num_class_total = num_class_0_train + num_class_1_train
@@ -519,28 +542,32 @@ for m in range(0,obs):
         weight_class_1_normalized = weight_class_1_train / (weight_class_0_train + weight_class_1_train)
 
         # Create a dictionary of class weights
-        # class_weights = {0: weight_class_0_normalized, 1: weight_class_1_normalized}
-        class_weights = {0: weight_class_0_train, 1: weight_class_1_train}
-        if giveclassweight:
-            params['class_weight'] = class_weights
-        else:
-            params['class_weight'] = None
-        params['bootstrap'] = False
-        params['max_samples'] = None
+        class_weights = {0: weight_class_0_normalized, 1: weight_class_1_normalized}
+        # class_weights = {0: weight_class_0_train, 1: weight_class_1_train}
 
-        case_weights_float = case_weights.astype(float)
-        #### Randomforest classifier
-        LO_Model = RandomForestClassifier(**params)
+
         # FIT THE MODEL TO THE TRAINING DATA
-        # , sample_weight = case_weights_float
-        if givesampleweight:
-            LO_Model.fit(X_train_l_noPID, y_train_l_weighted, sample_weight=case_weights_float)
-        else:
-            LO_Model.fit(X_train_l_noPID, y_train_l_weighted)
+        if givesampleweight and giveclassweight:
+            history = LO_Model.fit(X_train_l_noPID,
+                                   y_train_l_weighted,
+                                   sample_weight = case_weights)
+        elif givesampleweight and not giveclassweight:
+            history = LO_Model.fit(X_train_l_noPID,
+                                   y_train_l_weighted,
+                                   sample_weight=case_weights)
+        elif giveclassweight and not givesampleweight:
+            history = LO_Model.fit(X_train_l_noPID,
+                                   y_train_l_weighted,
+                                   class_weight=class_weights)
+        elif not givesampleweight and not giveclassweight:
+            history = LO_Model.fit(X_train_l_noPID,
+                                   y_train_l_weighted)
         # LO_Model.fit(X_train_l_main_noPID, y_train_l,sample_weight = Wts_train)
 
         #### TEST PREDICTION
-        y_pred_l = LO_Model.predict(X_test_l_noPID)
+        # Evaluate the model
+        y_pred_proba = LO_Model.predict(X_test_l_noPID)
+        y_pred_l = (y_pred_proba > 0.5).astype(int)
         local_model_accuracy = accuracy_score(y_test_l, y_pred_l)
         local_models[SubSet.loc[SubSet['DNeighbour'] == 0, 'pointID'].values[0]] = LO_Model
         if LocalCrossValidation:
@@ -552,9 +579,9 @@ for m in range(0,obs):
             prediction_cv = 0
             Local_models_cv.append(prediction_cv)
     elif Case == 'Regression':
-        params['bootstrap'] = False
-        params['max_samples'] = None
-        LO_Model = RandomForestRegressor(**params)
+        # params['bootstrap'] = False
+        # params['max_samples'] = None
+        LO_Model = xgb.XGBRegressor(objective='reg:squarederror', **params)
         # FIT THE MODEL TO THE TRAINING DATA
         # , sample_weight = case_weights_float
         LO_Model.fit(X_train_l_noPID, y_train_l_weighted)
@@ -576,9 +603,9 @@ for m in range(0,obs):
             prediction_cv = 0
             Local_models_cv.append(prediction_cv)
 
-    feature_importances_local = LO_Model.feature_importances_ * 100
-    Feature_Importance_l[SubSet.loc[SubSet['DNeighbour'] == 0, 'pointID'].values[0]] = feature_importances_local
-    local_model_accuracy_l[SubSet.loc[SubSet['DNeighbour'] == 0, 'pointID'].values[0]] = local_model_accuracy
+    # feature_importances_local = LO_Model.feature_importances_ * 100
+    # Feature_Importance_l[SubSet.loc[SubSet['DNeighbour'] == 0, 'pointID'].values[0]] = feature_importances_local
+    # local_model_accuracy_l[SubSet.loc[SubSet['DNeighbour'] == 0, 'pointID'].values[0]] = local_model_accuracy
 
     prediction_row = pd.DataFrame({'PointID': X_test_l['pointID'],
                                    'y_test_l': y_test_l,
@@ -745,7 +772,7 @@ if exportLocalFeatureImportanceSHP:
 
     # Set the coordinate reference system (CRS) if needed
     # For example, setting it to WGS 84 (EPSG:4326)
-    gdf.crs = 'EPSG:4326'
+    gdf.crs = from_epsg(4326)
 
     # Save the GeoDataFrame as a shapefile
     output_shapefile = f'GWML_XGBoost_{Case}.shp'
@@ -976,3 +1003,6 @@ if AnalyzeResiduales:
 
 
 print('finish')
+
+
+

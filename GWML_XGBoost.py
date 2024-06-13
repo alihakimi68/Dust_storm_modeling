@@ -33,13 +33,13 @@ giveclassweight = True
 givesampleweight = True
 n_splits = 5 # cross validation folds
 LocalCrossValidation = False # Performs Cross validation on local models with n_splits
-Case = 'Regression' # Classification or Regression
+Case = 'Classification' # Classification or Regression
 importance_threshold = 0 # Removes less important features from Global Model
 InBagSamples = 0.6 # from 0.5 to 0.9 for local models weighted bootstrapping
 AnalyzeResiduales = True
 plotFeatureImportance = True
 exportLocalFeatureImportanceSHP = True
-DatasetToAnalyze = 'WindowsMVEM' # Main , Distance, WindowsWMe, WindowsMVEM
+DatasetToAnalyze = 'Main' # Main , Distance, WindowsWMe, WindowsMVEM
 ################### Import the dataset #####################
 
 os.chdir("D:/University/DustStorming/ToAli/DustStormModeling/For training/")
@@ -416,12 +416,67 @@ for m in range(0,obs):
         SubSet = DataSetSorted[DataSetSorted['DNeighbour'] <= bw]
         Kernel_H = bw
 
-    # Make sure there is at least one type of both labels in the subset
-    while len(SubSet['dust_storm'].unique()) < 2 or SubSet['dust_storm'].value_counts()[0] < mincatobs or SubSet['dust_storm'].value_counts()[1] < mincatobs:
+        # Make sure there is at least one type of both labels in the subset
+    while len(SubSet['dust_storm'].unique()) < 2 or SubSet['dust_storm'].value_counts()[0] < mincatobs or \
+            SubSet['dust_storm'].value_counts()[1] < mincatobs:
         SubSet = DataSetSorted.iloc[:Ne + cc, :]
         cc += 1
+        # Create the plot
+        plt.figure(figsize=(10, 6))
+        Subset_coords = pd.merge(SubSet, coords, on='pointID', how='left')
+        # Plot points where dust_storm is 0
+        subset_0 = Subset_coords[Subset_coords['dust_storm'] == 0]
+        plt.scatter(subset_0['X'], subset_0['Y'], c='blue', label='dust_storm = 0', s=50)
+
+        # Plot points where dust_storm is 1
+        subset_1 = Subset_coords[Subset_coords['dust_storm'] == 1]
+        plt.scatter(subset_1['X'], subset_1['Y'], c='red', label='dust_storm = 1', s=50)
+
+        # Plot points where DNeighbour is 0 with stars
+        subset_star = Subset_coords[Subset_coords['DNeighbour'] == 0]
+        plt.scatter(subset_star['X'], subset_star['Y'], c='orange', marker='*', label='DNeighbour = 0', s=500)
+        plt.xlim(37, 42.5)
+        plt.ylim(35.8, 40.2)
+        # Add labels and legend
+        plt.xlabel('Longitude')
+        plt.ylabel('Latitude')
+        plt.title('Geographic Points by Dust Storm and DNeighbour')
+        # plt.legend()
+        plt.grid(True)
+
+        # Save the figure
+        plt.savefig(f'geographic_points_{cc}.png', dpi=300)
+        plt.close()  # Close the figure after saving
+
     if cc > 1:
-        # before_removal_coords = pd.merge(SubSet, coords, on='pointID', how='left')
+        before_removal_coords = pd.merge(SubSet, coords, on='pointID', how='left')
+
+        # Create the plot
+        plt.figure(figsize=(10, 6))
+
+        # Plot points where dust_storm is 0
+        subset_0 = before_removal_coords[before_removal_coords['dust_storm'] == 0]
+        plt.scatter(subset_0['X'], subset_0['Y'], c='blue', label='dust_storm = 0', s=50)
+
+        # Plot points where dust_storm is 1
+        subset_1 = before_removal_coords[before_removal_coords['dust_storm'] == 1]
+        plt.scatter(subset_1['X'], subset_1['Y'], c='red', label='dust_storm = 1', s=50)
+
+        # Plot points where DNeighbour is 0 with stars
+        subset_star = before_removal_coords[before_removal_coords['DNeighbour'] == 0]
+        plt.scatter(subset_star['X'], subset_star['Y'], c='orange', marker='*', label='DNeighbour = 0', s=500)
+        # Set the limits for x-axis (Longitude) and y-axis (Latitude)
+        plt.xlim(37, 42.5)
+        plt.ylim(35.8, 40.2)
+        # Add labels and legend
+        plt.xlabel('Longitude')
+        plt.ylabel('Latitude')
+        plt.title('Geographic Points by Dust Storm and DNeighbour')
+        plt.legend()
+        plt.grid(True)
+        plt.savefig(f'Figure01.png', dpi=300)
+        # Show the plot
+        plt.show()
 
         # Plot KDE plot
         # plt.figure(figsize=(10, 6))
@@ -464,20 +519,143 @@ for m in range(0,obs):
         Kernel_H = bw
 
     after_removal_coords = pd.merge(SubSet, coords, on='pointID', how='left')
-    layered_df_dict[SubSet.loc[SubSet['DNeighbour'] == 0, 'pointID'].values[0]] = after_removal_coords
 
+    # Create the plot
+    plt.figure(figsize=(10, 6))
+
+    # Plot points where dust_storm is 0
+    subset_0 = after_removal_coords[after_removal_coords['dust_storm'] == 0]
+    plt.scatter(subset_0['X'], subset_0['Y'], c='blue', label='dust_storm = 0', s=50)
+
+    # Plot points where dust_storm is 1
+    subset_1 = after_removal_coords[after_removal_coords['dust_storm'] == 1]
+    plt.scatter(subset_1['X'], subset_1['Y'], c='red', label='dust_storm = 1', s=50)
+
+    # Plot points where DNeighbour is 0 with stars
+    subset_star = after_removal_coords[after_removal_coords['DNeighbour'] == 0]
+    plt.scatter(subset_star['X'], subset_star['Y'], c='orange', marker='*', label='DNeighbour = 0', s=500)
+    plt.xlim(37, 42.5)
+    plt.ylim(35.8, 40.2)
+    # Add labels and legend
+    plt.xlabel('Longitude')
+    plt.ylabel('Latitude')
+    plt.title('Geographic Points by Dust Storm and DNeighbour')
+    plt.legend()
+    plt.grid(True)
+    plt.savefig(f'Figure02.png', dpi=300)
+    # Show the plot
+    plt.show()
+
+    # layered_df_dict[SubSet.loc[SubSet['DNeighbour'] == 0, 'pointID'].values[0]] = after_removal_coords
+    #
     # # Plotting latitude and longitude coordinates
-    # plt.figure(figsize=(10, 8))
+    # plt.figure(figsize=(10, 6))
     # plt.scatter(after_removal_coords['X'], after_removal_coords['Y'], c=after_removal_coords['dust_storm'],
     #             cmap='coolwarm', s=50, alpha=0.7, label='dust_storm')
     # plt.scatter(after_removal_coords['X'].iloc[0], after_removal_coords['Y'].iloc[0], color='red', marker='*', s=200,
     #             label='First Point')
     # plt.title('Scatter Plot of Latitude and Longitude Coordinates')
+    # plt.xlim(37, 42.5)
+    # plt.ylim(35.8, 40.2)
     # plt.xlabel('Longitude')
     # plt.ylabel('Latitude')
     # plt.grid(True)
     # plt.legend()
     # plt.show()
+
+
+    from scipy.spatial import distance
+
+
+    # Function to calculate distance between two points using Haversine formula
+    def calculate_distance_km(lat1, lon1, lat2, lon2):
+        # Convert latitude and longitude from degrees to radians
+        lat1 = np.radians(lat1)
+        lon1 = np.radians(lon1)
+        lat2 = np.radians(lat2)
+        lon2 = np.radians(lon2)
+
+        # Radius of the Earth in kilometers
+        R = 6371.0
+
+        # Haversine formula
+        dlon = lon2 - lon1
+        dlat = lat2 - lat1
+        a = np.sin(dlat / 2) ** 2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon / 2) ** 2
+        c = 2 * np.arcsin(np.sqrt(a))
+        distance = R * c
+
+        return distance
+
+
+    # Assuming the marker '*' is located at index 0 in the dataframe
+    marker_star_coord = [after_removal_coords['Y'].iloc[0], after_removal_coords['X'].iloc[0]]
+
+    # Calculate distances in kilometers
+    distances_km = [calculate_distance_km(marker_star_coord[0], marker_star_coord[1],
+                                          after_removal_coords['Y'].iloc[i], after_removal_coords['X'].iloc[i])
+                    for i in range(len(after_removal_coords))]
+
+    # Find the index of the point farthest from the marker '*'
+    max_index = np.argmax(distances_km)
+
+    # Calculate distances from each point to the marker '*'
+    distances_to_marker_star = [
+        calculate_distance_km(marker_star_coord[0], marker_star_coord[1],
+                              after_removal_coords['Y'].iloc[i], after_removal_coords['X'].iloc[i])
+        for i in range(len(after_removal_coords))]
+
+    # Sort distances in ascending order
+    sorted_distances = np.sort(distances_to_marker_star)
+
+    # Calculate the index that corresponds to 70% of the points
+    seventy_percent_index = int(0.7 * len(sorted_distances))
+
+    # Define inside_boundary_mask based on the 70% of the closest points to the marker '*'
+    inside_boundary_mask = np.array(distances_to_marker_star) <= sorted_distances[seventy_percent_index]
+
+    # Find the index of the point within the yellow color group that is the furthest from the marker '*'
+    yellow_indices = np.where(inside_boundary_mask)[0]
+    max_distance_index = yellow_indices[np.argmax([distances_to_marker_star[i] for i in yellow_indices])]
+
+    # Plotting latitude and longitude coordinates
+    plt.figure(figsize=(10, 6))
+    plt.scatter(after_removal_coords['X'], after_removal_coords['Y'], c=after_removal_coords['dust_storm'],
+                cmap='coolwarm', s=50, alpha=0.7, label='dust_storm')
+    plt.scatter(after_removal_coords['X'].iloc[0], after_removal_coords['Y'].iloc[0], color='red', marker='*', s=200,
+                label='First Point')
+    plt.scatter(after_removal_coords['X'].iloc[max_index], after_removal_coords['Y'].iloc[max_index], color='green',
+                marker='o', s=100,
+                label='Farthest Point')
+    plt.plot([after_removal_coords['X'].iloc[0], after_removal_coords['X'].iloc[max_index]],
+             [after_removal_coords['Y'].iloc[0], after_removal_coords['Y'].iloc[max_index]], color='black',
+             linestyle='--')
+    plt.text((after_removal_coords['X'].iloc[0] + after_removal_coords['X'].iloc[max_index]) / 2,
+             (after_removal_coords['Y'].iloc[0] + after_removal_coords['Y'].iloc[max_index]) / 2,
+             f'{distances_km[max_index]:.2f} km', ha='center', va='bottom', fontsize=12, color='black')
+
+    # Plot transparent boundary
+    plt.scatter(after_removal_coords['X'][inside_boundary_mask], after_removal_coords['Y'][inside_boundary_mask],
+                c='yellow', alpha=0.5, s=100, label='70% Boundary')
+
+    # Plot the point within the yellow color group that is the furthest from the marker '*'
+    plt.scatter(after_removal_coords['X'].iloc[max_distance_index], after_removal_coords['Y'].iloc[max_distance_index],
+                color='blue', marker='o', s=200, label='Furthest in Boundary')
+
+    # Annotate the distance on the plot
+    plt.text(after_removal_coords['X'].iloc[max_distance_index], after_removal_coords['Y'].iloc[max_distance_index],
+             f'{distances_to_marker_star[max_distance_index]:.2f} km', ha='right', va='bottom', fontsize=12,
+             color='black')
+
+    plt.title('Scatter Plot of Latitude and Longitude Coordinates')
+    plt.xlim(37, 42.5)
+    plt.ylim(35.8, 40.2)
+    plt.xlabel('Longitude')
+    plt.ylabel('Latitude')
+    plt.grid(True)
+    plt.legend()
+    plt.savefig(f'Figure03.png', dpi=300)
+    plt.show()
 
     #### Split training and test data for the local models
     X_l = SubSet.drop(['dust_storm'], axis=1)
@@ -505,6 +683,54 @@ for m in range(0,obs):
                                                      mincatobs,
                                                      InBagSamples,
                                                      n_splits)
+    y_train_l_weighted_df = pd.DataFrame(y_train_l_weighted, columns=['dust_storm'])
+    y_OOB_df = pd.DataFrame(y_OOB, columns=['dust_storm'])
+    y_train_l_weighted_df['pointID'] = y_train_l_weighted.index
+    y_train_l_weighted_df['DNeighbour'] = X_train_l_weighted['DNeighbour']
+    y_OOB_df['pointID'] = y_OOB.index
+    y_OOB_df['DNeighbour'] = X_OOB['DNeighbour']
+    # Merge y_train_l_weighted with coords on 'index' and 'pointID'
+    merged_data_train = pd.merge(y_train_l_weighted_df, coords, on='pointID', how='left')
+    merged_data_OOB = pd.merge(y_OOB_df, coords, on='pointID', how='left')
+    # Create the plot
+    # Assuming you already have merged_data_train and merged_data_OOB DataFrames
+
+    plt.figure(figsize=(10, 6))
+
+    # Plot points where dust_storm is 0 for merged_data_train
+    subset_0_train = merged_data_train[merged_data_train['dust_storm'] == 0]
+    plt.scatter(subset_0_train['X'], subset_0_train['Y'], c='blue', label='dust_storm = 0 (Train)', s=50)
+
+    # Plot points where dust_storm is 1 for merged_data_train
+    subset_1_train = merged_data_train[merged_data_train['dust_storm'] == 1]
+    plt.scatter(subset_1_train['X'], subset_1_train['Y'], c='red', label='dust_storm = 1 (Train)', s=50)
+
+    # Plot points where DNeighbour is 0 with stars for merged_data_train
+    subset_star_train = merged_data_train[merged_data_train['DNeighbour'] == 0]
+    plt.scatter(subset_star_train['X'], subset_star_train['Y'], c='orange', marker='*', label='DNeighbour = 0 (Train)',
+                s=500)
+
+    # Plot points where dust_storm is 0 for merged_data_OOB with alpha yellow tint
+    subset_0_OOB = merged_data_OOB[merged_data_OOB['dust_storm'] == 0]
+    plt.scatter(subset_0_OOB['X'], subset_0_OOB['Y'], c='grey', alpha=0.5, label='dust_storm = 0 (OOB)', s=50)
+
+    # Plot points where dust_storm is 1 for merged_data_OOB with alpha yellow tint
+    subset_1_OOB = merged_data_OOB[merged_data_OOB['dust_storm'] == 1]
+    plt.scatter(subset_1_OOB['X'], subset_1_OOB['Y'], c='orange', alpha=0.5, label='dust_storm = 1 (OOB)', s=50)
+
+    plt.xlim(37, 42.5)
+    plt.ylim(35.8, 40.2)
+    # Add labels and legend
+    plt.xlabel('Longitude')
+    plt.ylabel('Latitude')
+    plt.title('Geographic Points by Dust Storm and DNeighbour (Train and OOB)')
+    plt.legend()
+    plt.grid(True)
+    plt.savefig(f'Figure04.png', dpi=300)
+    # Show the plot
+    plt.show()
+
+
 
     # Drop pointID
     # X_train_l_main_noPID = X_train_l.drop(['pointID'], axis=1)
@@ -512,6 +738,7 @@ for m in range(0,obs):
     X_test_l_noPID = X_test_l.drop(['pointID','DNeighbour'], axis=1)
     X_OOB_noPID = X_OOB.drop(['pointID','DNeighbour'], axis=1)
     X_train_l_main_noPID = X_train_l.drop(['pointID','DNeighbour'], axis=1)
+
 
 
     if Case == 'Classification':

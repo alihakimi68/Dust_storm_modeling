@@ -32,13 +32,13 @@ giveclassweight = True
 givesampleweight = True
 n_splits = 5 # cross validation folds
 LocalCrossValidation = False # Performs Cross validation on local models with n_splits
-Case = 'Regression' # Classification or Regression
+Case = 'Classification' # Classification or Regression
 importance_threshold = 0 # Removes less important features from Global Model
 InBagSamples = 0.6 # from 0.5 to 0.9 for local models weighted bootstrapping
 AnalyzeResiduales = True
 plotFeatureImportance = True
 exportLocalFeatureImportanceSHP = True
-DatasetToAnalyze = 'WindowsMVEM' # Main , Distance, WindowsWMe, WindowsMVEM
+DatasetToAnalyze = 'Main' # Main , Distance, WindowsWMe, WindowsMVEM
 ################### Import the dataset #####################
 
 os.chdir("D:/University/DustStorming/ToAli/DustStormModeling/For training/")
@@ -71,7 +71,7 @@ elif DatasetToAnalyze == 'WindowsWMe':
                                     'Plan_curvature wmean', 'Profile_curvature wmean'])
 
 elif DatasetToAnalyze == 'WindowsMVEM':
-    dataset = dataset.drop(columns=['Soil_evaporation median', 'Lakes', 'Lakes entropy', 'Lakes mode',
+    dataset = dataset.drop(columns=['Year','Soil_evaporation median', 'Lakes', 'Lakes entropy', 'Lakes mode',
                                     'landcover mode', 'Precipitation',
                                     'Precipitation variance', 'Precipitation median', 'NDVI variance', 'Aspect',
                                     'Aspect variance', 'Aspect median', 'Curvature', 'Curvature median',
@@ -744,12 +744,25 @@ print("OOB Recall: {:.2f}".format(recall_local_OOB*100))
 print("OOB F1 Score: {:.2f}".format(f1_local_OOB*100))
 
 if exportLocalFeatureImportanceSHP:
+    for index, row in aggregated_df.iterrows():
+        if row['MajorityClass'] == 'TruePositive' :
+            aggregated_df.at[index, 'Y_Predict_Local'] = 1
+        elif row['MajorityClass'] == 'TrueNegative' :
+            aggregated_df.at[index, 'Y_Predict_Local'] = 0
+        elif row['MajorityClass'] == 'FalsePositive' :
+            aggregated_df.at[index, 'Y_Predict_Local'] = 1
+        elif row['MajorityClass'] == 'FalseNegative' :
+            aggregated_df.at[index, 'Y_Predict_Local'] = 0
+
+
     temp_df = df_local.drop(['pointID', 'dust_storm'], axis=1)
+    temp_de2 = aggregated_df.set_index('PointID')
+    temp_de2 = temp_de2.sort_index()
     ExportDF = pd.DataFrame()
     Localfeature_df = pd.DataFrame.from_dict(Feature_Importance_l , orient='index', columns=temp_df.columns)
     Localaccuracy_df = pd.DataFrame.from_dict(local_model_accuracy_l , orient='index', columns=['Accuracy'])
-    ExportDF = pd.concat([coords, Localfeature_df,Localaccuracy_df], axis=1)
-
+    ExportDF = pd.concat([coords, Localfeature_df,Localaccuracy_df,df_local['dust_storm'],temp_de2['Y_Predict_Local']], axis=1)
+    ExportDF['Residuals'] = ExportDF['dust_storm'] - ExportDF['Y_Predict_Local']
     # Convert latitude and longitude to a Point geometry
     geometry = [Point(xy) for xy in zip(ExportDF['X'], ExportDF['Y'])]
 

@@ -16,9 +16,9 @@ import numpy as np
 os.chdir("D:/University/DustStorming/ToAli/DustStormModeling/For training/")
 
 # For df_dustsources_WS0_X_0_PN20_SP__Dist
-dustsourcespickle = 'df_dustsources_WS0_X_0_PN20_SP__Dist_WS'
-FeatureCount = 23
-Estimator = 400
+# dustsourcespickle = 'df_dustsources_WS0_X_0_PN20_SP__Dist_WS'
+# FeatureCount = 23
+# Estimator = 400
 
 # # For df_dustsources_WS0_X_0_PN20_SP__Dist
 # dustsourcespickle = 'df_dustsources_WS0_X_0_PN20_SP__Dist'
@@ -31,31 +31,32 @@ Estimator = 400
 # Estimator = 400
 
 # For df_dustsources_WS7_X_7_PN20_SP_Var_Med_Ent_Mod
-# dustsourcespickle = 'df_dustsources_WS7_X_7_PN20_SP_Var_Med_Ent_Mod'
-# FeatureCount = 25
-# Estimator = 400
+dustsourcespickle = 'df_dustsources_WS7_X_7_PN20_SP_Var_Med_Ent_Mod'
+FeatureCount = 25
+Estimator = 400
 # For df_dustsources_WS7_X_7_PN20_SP_WMe_
 # dustsourcespickle = 'df_dustsources_WS7_X_7_PN20_SP_WMe_'
 # FeatureCount = 15
 df = pk.load(open(f'{dustsourcespickle}.pickle', 'rb'))
 
 # drop original categorical columns
-df = df.drop(columns=['X', 'Y','Year', 'landcover', 'soil_type','Distance_to_Wind'])
+# df = df.drop(columns=['X', 'Y','Year', 'landcover', 'soil_type','Distance_to_Wind'])
+df = df.drop(columns=['X', 'Y','Year', 'landcover', 'soil_type'])
 # df = df.drop(columns=['Soil_evaporation','Lakes','Precipitation','Soil_moisture','NDVI','Elevation',
 #                       'Aspect','Curvature','Plan_curvature','Profile_curvature','Distance_to_river',
 #                       'Slope','landcover entropy', 'landcover mode','soil_type entropy','soil_type mode'])
 
 
-# df_copy = df.drop(columns=['Lakes','Bare_Soil','Cropland','Natural_vegetation','Clay_Loam','Loam','Loam_Sand','Sand','Sand_Clay_Loam','Sand_Loam'])
+df_copy = df.drop(columns=['Lakes','Bare_Soil','Cropland','Natural_vegetation','Clay_Loam','Loam','Loam_Sand','Sand','Sand_Clay_Loam','Sand_Loam'])
 # # Create a pairplot with linear regression lines
 # sns.pairplot(df_copy, kind='reg', markers='.', height=2.5)
 # plt.show()
 
-X = df.drop(['dust_storm'], axis=1)
+X = df_copy.drop(['dust_storm'], axis=1)
 sc = MinMaxScaler()
 X_St = sc.fit_transform(X)
 X_St = pd.DataFrame(X_St, columns=X.columns)
-y = df['dust_storm']
+y = df_copy['dust_storm']
 X_train, X_test, y_train, y_test = train_test_split(X_St,y,test_size=0.2,random_state=0,stratify=y)
 
 #####################################################
