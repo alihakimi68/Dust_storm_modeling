@@ -51,3 +51,25 @@ To create the environment and install the required packages:
 
 - Test_Test_GWML_RandomForest.py / Test_Test_GWML_XGBoost.py
   - Data size Exploration  (NAISS)
+
+## Analysis Visualizations
+
+### Bandwidth change effect on the accuracy and precision of the validation and test sets for Random Forest
+![Bandwidth change effect on the accuracy and precision of the validation and test sets for Random Forest](Screenshots/4-2-1_Test_Bandwidth_change_RandomForest.jpg)
+*left) SWML accuracy regarding bandwidth change. right) SWML precision regarding bandwidth change.*
+
+### SWML local models’ accuracies for RF with Ds dataset
+![SWML local models’ accuracies for RF with Ds dataset](Screenshots/GWML_RF_Ds_Accuracies.PNG)
+*Bigger green circles indicate more accurate local models.*
+
+### SWML elevation median importance for RF with Ds dataset
+![SWML elevation median importance for RF with Ds dataset](Screenshots/GWML_RF_Ds_ElevtionMedian.PNG)
+*Elevation median was the most important feature in Global ML.*
+
+### Impact of changing test dataset on the precision and accuracy for Random Forest
+![Impact of changing test dataset on the precision and accuracy for Random Forest](Screenshots/Test_Dataset_change_RandomForest.jpg)
+*Upleft) Global ML accuracy for validation and test dataset. Upright) SWML accuracy for validation and test dataset. Bottomleft) Global ML precision for validation and test dataset. Bottomright) SWML precision for validation and test dataset.*
+
+### Impact of changing hyperparameters on the precision and accuracy for Random Forest
+![Impact of changing hyperparameters on the precision and accuracy for Random Forest](Screenshots/Test_Hyperparameters_change_RandomForest.jpg)
+*Upleft) Global ML accuracy for validation and test dataset. Upright) SWML accuracy for validation and test dataset. Bottomleft) Global ML precision for validation and test dataset. Bottomright) SWML precision for validation and test dataset.*
